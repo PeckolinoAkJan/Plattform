@@ -2,9 +2,9 @@ param(
     [string]$ProjectPath = "$PSScriptRoot\\..\\VtcDesktopClient.csproj",
     [string]$Runtime = "win-x64",
     [string]$Configuration = "Release",
+    [string]$Version = "1.1.1",
     [string]$OutputRoot = "$PSScriptRoot\\output",
     [string]$ApiBaseUrl = $env:VTC_API_URL,
-    [string]$ClientSecret = $env:VTC_CLIENT_SECRET,
     [string]$UpdateManifestUrl = $env:VTC_UPDATE_MANIFEST_URL,
     [switch]$BuildInnoInstaller
 )
@@ -34,6 +34,9 @@ Write-Host "🚀 Publishing: $ProjectPath"
     -p:PublishTrimmed=false `
     -p:EnableCompression=true `
     -p:IncludeNativeLibrariesForSelfExtract=true `
+    -p:Version=$Version `
+    -p:FileVersion="$Version.0" `
+    -p:InformationalVersion=$Version `
     -o $publishDir
 
 if ($LASTEXITCODE -ne 0) {
@@ -44,7 +47,6 @@ $publishedSettingsPath = Join-Path $publishDir "clientsettings.json"
 if (Test-Path $publishedSettingsPath) {
     $publishedSettings = Get-Content -LiteralPath $publishedSettingsPath -Raw | ConvertFrom-Json
     if (-not [string]::IsNullOrWhiteSpace($ApiBaseUrl)) { $publishedSettings.baseUrl = $ApiBaseUrl.TrimEnd('/') }
-    if (-not [string]::IsNullOrWhiteSpace($ClientSecret)) { $publishedSettings.clientSecret = $ClientSecret }
     if (-not [string]::IsNullOrWhiteSpace($UpdateManifestUrl)) { $publishedSettings.updateManifestUrl = $UpdateManifestUrl }
     $publishedSettings | ConvertTo-Json | Set-Content -LiteralPath $publishedSettingsPath -Encoding utf8NoBOM
 }
@@ -76,6 +78,7 @@ if ($BuildInnoInstaller) {
             "/DSourceDir=$publishDir",
             "/DOutputDir=$installerDir",
             "/DOutputBaseName=VtcDesktopClient-Setup",
+            "/DAppVersion=$Version",
             $issPath
         )
     }
@@ -97,6 +100,7 @@ if ($BuildInnoInstaller) {
         & $makensis `
             "/DSourceDir=$publishDir" `
             "/DOutputDir=$installerDir" `
+            "/DProductVersion=$Version" `
             $nsiPath
     }
 

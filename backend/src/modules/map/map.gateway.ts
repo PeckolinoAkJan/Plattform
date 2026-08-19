@@ -17,7 +17,6 @@ import {
   TelemetryBroadcastPayload,
   resolveTelemetryCoordinates,
   resolveTelemetryCargo,
-  resolveTelemetryDriverId,
   resolveTelemetrySpeed,
   resolveTelemetryTimestamp,
   UpdateTelemetryDto,
@@ -30,7 +29,15 @@ interface JwtPayload {
 
 type JoinPayload = string | { room?: string; companyId?: string };
 
-@WebSocketGateway({ namespace: "/telemetry", cors: { origin: "*" } })
+const socketAllowedOrigins = (process.env.FRONTEND_URL || "http://localhost:3000")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+@WebSocketGateway({
+  namespace: "/telemetry",
+  cors: { origin: socketAllowedOrigins, credentials: true },
+})
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class MapGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -50,15 +57,18 @@ export class MapGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   handleConnection(client: Socket): void {
-    const companyId = this.extractCompanyId(client);
+    const identity = this.extractIdentity(client);
 
-    if (!companyId) {
-      this.logger.warn(`WebSocket-Verbindung ohne companyId: ${client.id}`);
+    if (!identity?.sub) {
+      this.logger.warn(`Nicht authentifizierte WebSocket-Verbindung abgelehnt: ${client.id}`);
+      client.disconnect(true);
       return;
     }
 
-    const room = this.getCompanyRoom(companyId);
+    const companyId = this.getString(identity.companyId);
+    const room = companyId ? this.getCompanyRoom(companyId) : "global";
     void client.join(room);
+    client.data.userId = identity.sub;
     client.data.companyId = companyId;
     client.data.room = room;
 
@@ -106,11 +116,11 @@ export class MapGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const rawPayload = payload as RawTelemetryPayload;
     const roomCompanyId = this.getEffectiveCompanyId(client, rawPayload.companyId);
     const room = this.getCompanyRoom(roomCompanyId);
-    const driverId = resolveTelemetryDriverId(rawPayload);
+    const driverId = this.getString(client.data.userId);
     const position = resolveTelemetryCoordinates(rawPayload);
     const speedKmh = resolveTelemetrySpeed(rawPayload);
 
-    if (!driverId || !position || speedKmh === null) {
+    if (!driverId || !position || speedKmh === null || speedKmh < 0) {
       throw new WsException("Ungültiger Telemetrie-Payload.");
     }
 
@@ -168,14 +178,12 @@ export class MapGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   private getEffectiveCompanyId(client: Socket, payloadCompanyId?: string): string {
-    const roomCompanyId = payloadCompanyId ?? this.extractCompanyId(client);
+    const roomCompanyId = this.getString(client.data.companyId);
     if (!roomCompanyId) {
       throw new WsException("Keine companyId für Telemetrie-Sendung gefunden.");
     }
 
-    const allowedRoom = this.getClientRoom(client);
-    const fromPayload = this.getCompanyRoom(roomCompanyId);
-    if (allowedRoom && allowedRoom !== fromPayload) {
+    if (payloadCompanyId && payloadCompanyId !== roomCompanyId) {
       throw new WsException("Ungültige companyId im Payload.");
     }
 
@@ -188,7 +196,7 @@ export class MapGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return this.getCompanyRoom(payloadCompanyId);
     }
 
-    const connectionCompanyId = this.extractCompanyId(client);
+    const connectionCompanyId = this.getString(client.data.companyId);
     if (connectionCompanyId) {
       return this.getCompanyRoom(connectionCompanyId);
     }
@@ -201,25 +209,7 @@ export class MapGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return false;
     }
 
-    const connectionRoom = this.getClientRoom(client);
-    if (!connectionRoom) {
-      return this.isRoomNameWellFormed(room);
-    }
-
-    if (room === connectionRoom) {
-      return true;
-    }
-
-    return this.isRoomNameWellFormed(room) && this.getAllowedCompanyFromRoom(room) === this.getAllowedCompanyFromRoom(connectionRoom);
-  }
-
-  private getAllowedCompanyFromRoom(room: string): string | null {
-    if (!room.startsWith(MapGateway.ROOM_PREFIX)) {
-      return null;
-    }
-
-    const raw = room.slice(MapGateway.ROOM_PREFIX.length);
-    return raw.length > 0 ? raw : null;
+    return this.getClientRoom(client) === room && this.isRoomNameWellFormed(room);
   }
 
   private isRoomNameWellFormed(room: string): boolean {
@@ -271,34 +261,20 @@ export class MapGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return `${MapGateway.ROOM_PREFIX}${companyId}`;
   }
 
-  private extractCompanyId(client: Socket): string | null {
-    const auth = client.handshake.auth as { token?: string; companyId?: string };
-    const query = client.handshake.query as { token?: string; companyId?: string } | undefined;
+  private extractIdentity(client: Socket): JwtPayload | null {
+    const auth = client.handshake.auth as { token?: string };
     const token = this.normalizeToken(
       auth?.token ||
-      (typeof query?.token === "string" ? query.token : undefined) ||
       (this.getTokenFromCookie(client.handshake.headers.cookie) ?? undefined),
     );
 
     if (token && this.jwtSecret) {
       try {
         const decoded = this.jwtService.verify<JwtPayload>(token, { secret: this.jwtSecret });
-        if (decoded?.companyId) {
-          return decoded.companyId;
-        }
+        return decoded?.sub ? decoded : null;
       } catch {
-        // invalid token intentionally ignored for stream resilience
+        return null;
       }
-    }
-
-    const companyIdFromAuth = this.getString(auth?.companyId);
-    if (companyIdFromAuth) {
-      return companyIdFromAuth;
-    }
-
-    const companyIdFromQuery = this.getString(query?.companyId);
-    if (companyIdFromQuery) {
-      return companyIdFromQuery;
     }
 
     return null;

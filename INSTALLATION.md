@@ -2,7 +2,7 @@
 
 ## Voraussetzungen
 
-- Node.js 20 LTS mit Corepack
+- Node.js 22 LTS mit Corepack
 - pnpm 11
 - Docker Desktop oder PostgreSQL 16 plus Redis 7
 - .NET SDK 8 fuer Cliententwicklung; auf Ziel-PCs ist keine Runtime noetig
@@ -42,10 +42,10 @@ Erforderliche Produktionswerte:
 
 - `DATABASE_URL`, `REDIS_PASSWORD`
 - `JWT_SECRET` mit mindestens 64 zufaelligen Zeichen
-- separates `CLIENT_SECRET` fuer HMAC
 - `FRONTEND_URL`, `BACKEND_URL`, `OAUTH_COOKIE_DOMAIN`
 - Google-/Discord-/Steam-Zugangsdaten, falls Provider aktiviert werden
-- `LOCAL_LOGIN_PASSWORD_HASH` und `LOCAL_LOGIN_PASSWORD_SALT`, falls lokaler Login genutzt wird
+
+Der produktive lokale Login verwendet ausschliesslich den Passwort-Hash des jeweiligen importierten Benutzers. `LOCAL_LOGIN_PASSWORD` und `LOCAL_LOGIN_PASSWORD_HASH` sind nur Entwicklungshilfen und werden bei `NODE_ENV=production` ignoriert. Signierte Desktop-Anfragen verwenden den aktuellen Benutzer-JWT als HMAC-Schluessel sowie Timestamp und Nonce; ein globales Secret wird nicht in den oeffentlichen Installer eingebettet.
 
 ### Google, Discord und Steam registrieren
 
@@ -96,7 +96,7 @@ Der Installer legt Startmenue- und Desktopverknuepfung sowie einen Uninstaller a
 3. ETS2/ATS neu starten.
 4. Spiel- und Serverstatus im Kopf pruefen.
 
-Die Session wird mit Windows DPAPI verschluesselt. Das Client-Secret gehoert in die ausgerollte `clientsettings.json`; fuer hoehere Sicherheit sollte es spaeter ueber eine geraetegebundene Registrierung statt eines globalen Secrets ausgegeben werden.
+Die Session wird mit Windows DPAPI verschluesselt. `clientsettings.json` enthaelt nur API- und Update-URLs, keine Secrets.
 
 ## 5. Installer neu bauen
 
@@ -104,12 +104,12 @@ Die Session wird mit Windows DPAPI verschluesselt. Das Client-Secret gehoert in 
 Set-Location desktop\VtcDesktopClient
 .\Installer\build-installer.ps1 `
   -ApiBaseUrl "https://staging.vtc-truck-hub.de" `
-  -ClientSecret "<HMAC-CLIENT-SECRET>" `
-  -UpdateManifestUrl "https://staging.vtc-truck-hub.de/client/updates/latest.json" `
+  -UpdateManifestUrl "https://github.com/PeckolinoAkJan/Plattform/releases/latest/download/latest.json" `
+  -Version "1.1.1" `
   -BuildInnoInstaller
 ```
 
-Das Skript verwendet Inno Setup, falls vorhanden, andernfalls NSIS.
+Das Skript verwendet Inno Setup, falls vorhanden, andernfalls NSIS. Der Tag-Workflow baut automatisch portable ZIP, Setup-EXE und `latest.json` mit der SHA-256-Pruefsumme derselben Setup-Datei.
 
 ## 6. Backup und Restore
 

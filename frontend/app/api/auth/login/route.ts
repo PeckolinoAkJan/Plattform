@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const SESSION_COOKIE_DOMAIN = process.env.SESSION_COOKIE_DOMAIN?.trim() || undefined;
 
 type LoginBody = {
   email: string;
@@ -53,15 +54,15 @@ export async function POST(req: NextRequest) {
   }
 
   const response = NextResponse.json({
-    ...upstreamPayload,
+    user: upstreamPayload.user ?? upstreamPayload.data?.user ?? null,
     returnTo: sanitizeReturnTo(body.returnTo),
-    token,
   });
 
   response.cookies.set('vtc_session', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
+    domain: SESSION_COOKIE_DOMAIN,
     path: '/',
     maxAge: 60 * 60 * 24,
   });

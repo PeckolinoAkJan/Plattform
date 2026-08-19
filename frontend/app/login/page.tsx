@@ -4,7 +4,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { FormEvent, Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { setStoredAuthToken } from '../../lib/auth-client';
 import BrandMark from '../../components/marketing/brand-mark';
 import SiteHeader from '../../components/marketing/site-header';
 import ScrollReveal from '../../components/marketing/scroll-reveal';
@@ -109,9 +108,6 @@ function LoginContent() {
       return;
     }
 
-    if (payload.token) {
-      setStoredAuthToken(payload.token);
-    }
     setActiveCompanyId(payload);
 
     router.push(sanitizeReturnTo(payload.returnTo || defaultReturnTo));
@@ -208,7 +204,7 @@ function LoginContent() {
                   <p className="text-sm text-gold-100/80">Oder direkt mit deinem Account fortfahren:</p>
                   <div className="grid gap-2">
                     {providerButtons.map((provider) => {
-                      const enabled = providerAvailability?.[provider.id] !== false;
+                      const enabled = providerAvailability?.[provider.id] === true;
                       return enabled ? (
                         <a
                           key={provider.id}

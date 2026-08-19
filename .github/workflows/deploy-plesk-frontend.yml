@@ -87,6 +87,7 @@ jobs:
           key: ${{ secrets.PLESK_SSH_KEY }}
           source: .artifacts/frontend-${{ github.sha }}.tgz
           target: /tmp/vtc-deploy
+          strip_components: 1
 
       - name: Deploy on Plesk
         uses: appleboy/ssh-action@v1.0.3
@@ -101,7 +102,7 @@ jobs:
             APP_DIR="${{ secrets.PLESK_FRONTEND_DIR }}"
             SERVICE_NAME="${{ secrets.PLESK_FRONTEND_SERVICE_NAME || 'vtc-frontend' }}"
             NODE_ENV="${{ secrets.PLESK_NODE_ENV || 'production' }}"
-            PORT="${{ secrets.PLESK_FRONTEND_PORT || '3001' }}"
+            PORT="${{ secrets.PLESK_FRONTEND_PORT || '3000' }}"
             RELEASE_FILE="/tmp/vtc-deploy/frontend-${{ github.sha }}.tgz"
             RELEASE_DIR="/tmp/vtc-frontend-release"
 
@@ -116,9 +117,15 @@ jobs:
             tar -xzf "$RELEASE_FILE" -C "$RELEASE_DIR"
 
             RELEASE_PATH="$APP_DIR/releases/${{ github.sha }}"
-            mkdir -p "$APP_DIR/releases"
+            mkdir -p "$APP_DIR/releases" "$APP_DIR/shared"
+            ENV_FILE="$APP_DIR/shared/.env.production"
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "Persistente Frontend-Konfiguration fehlt: $ENV_FILE"
+              exit 1
+            fi
             rm -rf "$RELEASE_PATH"
             mv "$RELEASE_DIR"/frontend "$RELEASE_PATH"
+            ln -sfn "$ENV_FILE" "$RELEASE_PATH/.env.production"
 
             cd "$RELEASE_PATH"
             corepack pnpm install --frozen-lockfile
@@ -136,6 +143,19 @@ jobs:
               pm2 save
             else
               echo "WARN: pm2 nicht gefunden. Bitte in Plesk die Prozessverwaltung konfigurieren (z. B. eigene startCommand im Node.js-Tooling)."
+              exit 1
+            fi
+
+            healthy=false
+            for attempt in $(seq 1 20); do
+              if curl --fail --silent --show-error "http://127.0.0.1:$PORT/" >/dev/null; then
+                healthy=true
+                break
+              fi
+              sleep 2
+            done
+            if [ "$healthy" != true ]; then
+              echo "Frontend health check failed on port $PORT."
               exit 1
             fi
 

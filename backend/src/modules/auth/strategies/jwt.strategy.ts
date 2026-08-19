@@ -11,6 +11,28 @@ export interface JwtPayload {
   companyId?: string;
 }
 
+const sessionCookieExtractor = (request: { headers?: { cookie?: string } } | undefined): string | null => {
+  const cookieHeader = request?.headers?.cookie;
+  if (!cookieHeader) {
+    return null;
+  }
+
+  for (const part of cookieHeader.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator < 0 || part.slice(0, separator).trim() !== "vtc_session") {
+      continue;
+    }
+
+    try {
+      return decodeURIComponent(part.slice(separator + 1).trim());
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+};
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(PassportJwtStrategy) {
   constructor(configService: ConfigService) {
@@ -20,7 +42,10 @@ export class JwtStrategy extends PassportStrategy(PassportJwtStrategy) {
     }
 
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        sessionCookieExtractor,
+      ]),
       ignoreExpiration: false,
       secretOrKey: secret,
     });

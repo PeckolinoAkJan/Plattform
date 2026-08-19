@@ -4,11 +4,11 @@ VTC Hub ist eine Plattform fuer ETS2/ATS-Speditionen mit NestJS-API, Next.js-Das
 
 ## Gepruefter Stand
 
-- Backend: Produktionsbuild erfolgreich; Healthcheck, CORS, Upload-Auslieferung, JWT/OAuth, HMAC-SHA256 und atomarer Redis-Replay-Schutz vorhanden.
+- Backend: Produktionsbuild erfolgreich; Healthcheck, CORS, Upload-Auslieferung, JWT/OAuth, JWT-gebundenes HMAC-SHA256 und atomarer Redis-Replay-Schutz vorhanden.
 - Frontend: Produktionsbuild erfolgreich; Landingpage, Login, Dashboard, Profil, Spedition, Fahrtenbuch und Socket.io/Leaflet-Livekarte vorhanden.
 - Desktop: Produktionsbuild erfolgreich; echtes SCS-SDK-Binding, Login, DPAPI-Session, sicherer HMAC-Client, Updater-Pruefsumme und sicherer Plugin-Installer vorhanden.
 - Daten: Prisma-Schema, initiale Produktionsmigration, Seed, PostgreSQL/Redis-Compose, Backup und Restore vorhanden.
-- Installer: portable Ausgabe und NSIS-Setup-EXE sind gebaut.
+- Installer: portable Ausgabe und NSIS-Setup-EXE fuer Version 1.1.1 sind gebaut; der Tag-Workflow erzeugt zusaetzlich das SHA-256-Update-Manifest.
 - Bestandsdaten: Der verifizierte Legacy-Export wurde importiert (7 Benutzer, 2 Speditionen, 5 Mitgliedschaften und 9 Social-Accounts). Der Import ist per Audit-ID idempotent.
 - Lokaler Betrieb: PostgreSQL und Redis laufen in Docker; Backend und Frontend wurden mit der aktuellen Konfiguration erfolgreich gebaut.
 
@@ -56,7 +56,7 @@ pnpm run dev
 - Portable: `desktop/VtcDesktopClient/Installer/output/install_portable/VtcDesktopClient.exe`
 - Rendervergleich: `desktop/VtcDesktopClient/Installer/output/client-render-final.png`
 
-Die produktiven Werte fuer Backend-URL, Update-Manifest und Client-Secret werden in `clientsettings.json` gesetzt. Das Telemetrie-Plugin wird ueber den Button im Client in ETS2/ATS installiert.
+Die produktiven Werte fuer Backend-URL und Update-Manifest werden in `clientsettings.json` gesetzt. Die Datei enthaelt keine Secrets. Das Telemetrie-Plugin wird ueber den Button im Client in ETS2/ATS installiert.
 
 ## Importierte Bestandsdaten
 
@@ -77,6 +77,6 @@ Die realen Provider-Anwendungen muessen vor Produktion mit den Callback-URLs aus
 
 ## Vor einem echten Go-live
 
-Repository-Code kann keine externen Geheimnisse oder Konten erzeugen. Vor Produktion muessen reale DNS-/TLS-/Plesk-Daten, starke PostgreSQL-/Redis-/JWT-/HMAC-Secrets sowie Google-, Discord- und Steam-Providerdaten eingetragen werden. Fuer eine geografisch exakte Leaflet-Position muss ausserdem ein kalibrierter SCS-Weltkoordinaten-zu-WGS84-Konverter bereitgestellt werden; die SCS-Telemetrie selbst liefert Spielweltkoordinaten.
+Repository-Code kann keine externen Geheimnisse oder Konten erzeugen. Vor Produktion muessen reale DNS-/TLS-/Plesk-Daten, starke PostgreSQL-/Redis-/JWT-Secrets sowie Google-, Discord- und Steam-Providerdaten eingetragen werden. Fuer eine geografisch exakte Leaflet-Position muss ausserdem ein kalibrierter SCS-Weltkoordinaten-zu-WGS84-Konverter bereitgestellt werden; die SCS-Telemetrie selbst liefert Spielweltkoordinaten.
 
 Ausfuehrliche Schritte: `INSTALLATION.md`, `PLESK-DEPLOY.md` und `DEPLOYMENT_COMPLETE.md`.

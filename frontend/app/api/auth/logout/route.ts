@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+const SESSION_COOKIE_DOMAIN = process.env.SESSION_COOKIE_DOMAIN?.trim() || undefined;
+
 export async function POST() {
   const response = NextResponse.json({ ok: true });
 
@@ -9,6 +11,7 @@ export async function POST() {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
+    domain: SESSION_COOKIE_DOMAIN,
     path: '/',
     maxAge: 0,
   });

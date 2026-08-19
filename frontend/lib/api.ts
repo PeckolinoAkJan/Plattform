@@ -1,5 +1,5 @@
-import axios, { AxiosError, InternalAxiosRequestConfig, type AxiosResponse } from 'axios';
-import { getStoredAuthToken, removeStoredAuthToken } from './auth-client';
+import axios, { AxiosError, type AxiosResponse } from 'axios';
+import { removeStoredAuthToken } from './auth-client';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -114,17 +114,6 @@ function emitAuthExpired() {
   }
 }
 
-api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = getStoredAuthToken();
-    if (token && !config.headers.Authorization) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error),
-);
-
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error) => {
@@ -154,12 +143,6 @@ export const getLogbookEntries = async () => {
   return response.data;
 };
 
-export const submitLogbookEntry = async (payload: unknown) => {
-  const response = await api.post<LogbookEntry>('/api/logbook', payload);
-  logApiInteraction({ status: response.status, method: 'POST', url: '/api/logbook' });
-  return response.data;
-};
-
 export const getCompanyProfile = async () => {
   const response = await api.get<Company>('/api/company');
   logApiInteraction({ status: response.status, method: 'GET', url: '/api/company' });
@@ -186,7 +169,6 @@ export const updateCurrentUser = async (payload: Partial<UserProfile>) => {
 
 export const logbookApi = {
   list: getLogbookEntries,
-  submit: submitLogbookEntry,
 };
 
 export const companyApi = {

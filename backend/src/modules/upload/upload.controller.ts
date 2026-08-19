@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
-import { extname, join } from "node:path";
+import { rm } from "node:fs/promises";
+import { extname, join, resolve } from "node:path";
 import {
   Body,
   Controller,
@@ -12,6 +13,7 @@ import {
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { diskStorage } from "multer";
+import { CompanyRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { CurrentUser, type CurrentUserValue } from "../../common/decorators/current-user.decorator";
@@ -21,8 +23,9 @@ import {
 } from "./image-upload.filters";
 import { ImageUploadValidationPipe } from "./image-upload-validation.pipe";
 
-const AVATAR_UPLOAD_PATH = join(process.cwd(), "uploads", "avatars");
-const LOGO_UPLOAD_PATH = join(process.cwd(), "uploads", "logos");
+const UPLOAD_ROOT = resolve(process.env.UPLOAD_ROOT || join(process.cwd(), "uploads"));
+const AVATAR_UPLOAD_PATH = join(UPLOAD_ROOT, "avatars");
+const LOGO_UPLOAD_PATH = join(UPLOAD_ROOT, "logos");
 
 const imageExtensions: Record<string, string> = {
   "image/jpeg": ".jpg",
@@ -95,17 +98,24 @@ export class UploadController {
     }),
   )
   async uploadCompanyLogo(
-    @UploadedFile(new ImageUploadValidationPipe()) file: { filename: string },
+    @UploadedFile(new ImageUploadValidationPipe()) file: { filename: string; path: string },
     @CurrentUser() user: CurrentUserValue,
   ) {
-    if (!user.companyId) {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: user.userId },
+      select: { companyId: true, companyRole: true },
+    });
+
+    const canManageLogo = actor?.companyRole === CompanyRole.OWNER || actor?.companyRole === CompanyRole.DISPATCHER;
+    if (!actor?.companyId || actor.companyId !== user.companyId || !canManageLogo) {
+      await rm(file.path, { force: true });
       throw new ForbiddenException("No company assigned to current user.");
     }
 
     const logoUrl = `/uploads/logos/${file.filename}`;
 
     await this.prisma.company.update({
-      where: { id: user.companyId },
+      where: { id: actor.companyId },
       data: {
         logoUrl,
       },

@@ -12,8 +12,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly Dispatcher _dispatcher;
     private readonly TelemetryPluginInstaller _pluginInstaller = new();
     private readonly ClientAutoUpdater _autoUpdater;
+    private readonly SemaphoreSlim _liveTelemetryGate = new(1, 1);
+    private readonly CancellationTokenSource _lifetime = new();
     private ClientUpdateCheckResult? _update;
     private DateTime? _jobStartedAt;
+    private DateTime _lastLiveTelemetrySentAtUtc = DateTime.MinValue;
     private bool _disposed;
 
     private string _gameStatus = "GAME DISCONNECTED";
@@ -166,7 +169,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         Ui(() => GameStatusDetails = "Job in progress");
     }
 
-    private void OnTelemetryUpdated(object? sender, TelemetryPayload payload) => Apply(payload);
+    private void OnTelemetryUpdated(object? sender, TelemetryPayload payload)
+    {
+        Apply(payload);
+        _ = SendLiveTelemetryAsync(payload);
+    }
 
     private void OnJobCancelled(object? sender, TelemetryPayload payload)
     {
@@ -236,6 +243,56 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
+    private async Task SendLiveTelemetryAsync(TelemetryPayload payload)
+    {
+        if (_api is null || string.IsNullOrWhiteSpace(_api.JwtToken)) return;
+        if (payload.Latitude is not { } latitude || payload.Longitude is not { } longitude) return;
+        if (Math.Abs(latitude) > 90d || Math.Abs(longitude) > 180d) return;
+
+        var now = DateTime.UtcNow;
+        if (now - _lastLiveTelemetrySentAtUtc < TimeSpan.FromSeconds(3)) return;
+
+        var enteredGate = false;
+        try
+        {
+            if (!await _liveTelemetryGate.WaitAsync(0, _lifetime.Token).ConfigureAwait(false)) return;
+            enteredGate = true;
+
+            now = DateTime.UtcNow;
+            if (now - _lastLiveTelemetrySentAtUtc < TimeSpan.FromSeconds(3)) return;
+            _lastLiveTelemetrySentAtUtc = now;
+
+            await _api.SendLiveLocationAsync(new LocationData
+            {
+                Latitude = latitude,
+                Longitude = longitude,
+                SpeedKmh = Math.Max(payload.SpeedKmh, 0),
+                Heading = payload.Heading ?? 0,
+                TruckModel = payload.TruckModel ?? payload.Truck,
+                CargoName = payload.Cargo,
+                SourceCity = payload.SourceCity,
+                DestinationCity = payload.DestinationCity,
+                TimestampUtc = payload.TimestampUtc,
+            }, _lifetime.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Ui(() =>
+            {
+                ApiStatus = "SERVER TELEMETRY ERROR";
+                ApiStatusDetails = ex.Message;
+                ServerStatusDotBrush = Brush("#EF4444");
+            });
+        }
+        finally
+        {
+            if (enteredGate) _liveTelemetryGate.Release();
+        }
+    }
+
     private void SetInitialPluginState() => PluginStatus = _pluginInstaller.GetCurrentState().StatusMessage;
     private void Ui(Action action) { if (_dispatcher.CheckAccess()) action(); else _dispatcher.BeginInvoke(action); }
     private static string Text(string? value, string fallback) => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
@@ -247,6 +304,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _lifetime.Cancel();
         _telemetry.JobStarted -= OnJobStarted;
         _telemetry.JobDelivered -= OnJobDelivered;
         _telemetry.JobCancelled -= OnJobCancelled;

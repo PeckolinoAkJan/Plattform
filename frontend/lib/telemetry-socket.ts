@@ -1,4 +1,3 @@
-import { getStoredAuthToken } from './auth-client';
 import { io, type Socket } from 'socket.io-client';
 
 export const TELEMETRY_NAMESPACE = '/telemetry';
@@ -332,7 +331,6 @@ export const createTelemetrySocket = ({
   companyId,
   autoConnect = true,
 }: CreateTelemetrySocketParams): Socket<RawTelemetryPayload, RawTelemetryPayload> => {
-  const token = getStoredAuthToken();
   const joinRoom = toRequiredString(room);
   const joinCompany = toRequiredString(companyId);
 
@@ -340,7 +338,6 @@ export const createTelemetrySocket = ({
     path: '/socket.io',
     transports: ['websocket'],
     withCredentials: true,
-    auth: token ? { token } : undefined,
     query: joinCompany
       ? { companyId: joinCompany }
       : joinRoom

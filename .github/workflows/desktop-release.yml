@@ -27,23 +27,48 @@ jobs:
       - name: Restore
         run: dotnet restore "desktop/VtcDesktopClient/VtcDesktopClient.csproj"
 
-      - name: Publish single-file x64
-        run: |
-          dotnet publish "desktop/VtcDesktopClient/VtcDesktopClient.csproj" `
-            -c Release -r win-x64 `
-            --self-contained true `
-            -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -o "desktop/.artifacts"
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
 
-      - name: Create release archive
+      - name: Build portable client and installer
+        env:
+          RELEASE_API_URL: ${{ vars.VTC_API_URL }}
         run: |
-          New-Item -ItemType Directory -Path "desktop/.artifacts/zips" -Force | Out-Null
-          Compress-Archive -Path "desktop/.artifacts/*" -DestinationPath "desktop/.artifacts/VtcDesktopClient-${{ github.ref_name }}-win-x64.zip" -Force
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          $apiUrl = if ([string]::IsNullOrWhiteSpace($env:RELEASE_API_URL)) { "https://staging.vtc-truck-hub.de" } else { $env:RELEASE_API_URL }
+          $manifestUrl = "https://github.com/${{ github.repository }}/releases/latest/download/latest.json"
+          & "desktop/VtcDesktopClient/Installer/build-installer.ps1" `
+            -Version $version `
+            -ApiBaseUrl $apiUrl `
+            -UpdateManifestUrl $manifestUrl `
+            -BuildInnoInstaller
+
+      - name: Create release assets
+        run: |
+          $artifactDir = "desktop/.artifacts"
+          $installer = "desktop/VtcDesktopClient/Installer/output/installer/VtcDesktopClient-Setup.exe"
+          New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null
+          Copy-Item -LiteralPath $installer -Destination "$artifactDir/VtcDesktopClient-Setup.exe" -Force
+          Compress-Archive `
+            -Path "desktop/VtcDesktopClient/Installer/output/install_portable/*" `
+            -DestinationPath "$artifactDir/VtcDesktopClient-${{ github.ref_name }}-win-x64.zip" `
+            -Force
+
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          $sha256 = (Get-FileHash -LiteralPath "$artifactDir/VtcDesktopClient-Setup.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+          [ordered]@{
+            version = $version
+            installerUrl = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/VtcDesktopClient-Setup.exe"
+            mandatory = $false
+            releaseNotes = "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+            sha256 = $sha256
+          } | ConvertTo-Json | Set-Content -LiteralPath "$artifactDir/latest.json" -Encoding utf8NoBOM
 
       - name: Publish on GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             desktop/.artifacts/VtcDesktopClient-${{ github.ref_name }}-win-x64.zip
+            desktop/.artifacts/VtcDesktopClient-Setup.exe
+            desktop/.artifacts/latest.json
           generate_release_notes: true

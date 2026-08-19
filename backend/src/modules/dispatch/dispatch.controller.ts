@@ -19,8 +19,11 @@ export class DispatchController {
   }
 
   @Get("jobs/:companyId")
-  async getAvailableJobs(@Param("companyId") companyId: string) {
-    return this.dispatchService.getAvailableJobs(companyId);
+  async getAvailableJobs(
+    @CurrentUser() user: CurrentUserValue,
+    @Param("companyId") companyId: string,
+  ) {
+    return this.dispatchService.getAvailableJobs(user.userId, companyId);
   }
 
   @Post("jobs/:id/accept")
