@@ -20,7 +20,7 @@ export class MapService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getLivePositions(params: GetLivePositionsParams = {}) {
-    const companyId = typeof params.companyId === "string" ? params.companyId.trim() : undefined;
+    const companyId = typeof params.companyId === "string" ? params.companyId.trim() : params.companyId;
     const now = new Date();
     const maxAgeMinutes = this.resolvePositiveInteger(params.maxAgeMinutes, 60);
     const since = new Date(now.getTime() - maxAgeMinutes * 60 * 1000);
@@ -32,7 +32,9 @@ export class MapService {
       },
     };
 
-    if (companyId) {
+    if (companyId === null) {
+      where.companyId = null;
+    } else if (companyId) {
       where.companyId = companyId;
     }
 
@@ -54,7 +56,7 @@ export class MapService {
     });
 
     return {
-      source: companyId ? "company" : "global",
+      source: companyId ? "company" : "unassigned",
       requestedCompanyId: companyId ?? null,
       generatedAt: now.toISOString(),
       points: positions.map((position) => ({
@@ -98,20 +100,16 @@ export class MapService {
       throw new NotFoundException("User nicht gefunden.");
     }
 
-    if (!targetCoordinates || speedKmh === null) {
+    if (!targetCoordinates || speedKmh === null || speedKmh < 0) {
       throw new BadRequestException("Ungültiger Live-Telemetrie-Payload.");
     }
 
     const payloadCompanyId = this.normalizeCompanyId(payload.companyId);
-    if (!payloadCompanyId && !user.companyId) {
-      throw new BadRequestException("Keine aktive Spedition für die Live-Telemetrie vorhanden.");
-    }
-
-    if (payloadCompanyId && user.companyId && payloadCompanyId !== user.companyId) {
+    if (payloadCompanyId && payloadCompanyId !== user.companyId) {
       throw new ForbiddenException("Du darfst nur Telemetrie deiner eigenen Spedition senden.");
     }
 
-    const resolvedCompanyId = payloadCompanyId ?? user.companyId;
+    const resolvedCompanyId = user.companyId;
     const driverName = this.normalizeString(payload.driverName) ?? user.displayName;
     const truckModel = this.normalizeString(payload.truckModel) ?? "Unbekannt";
     const sourceCity = this.normalizeString(payload.sourceCity);
@@ -124,13 +122,9 @@ export class MapService {
     const timestamp = new Date(resolveTelemetryTimestamp(payload)).toISOString();
 
     const persisted = await this.prisma.$transaction(async (transaction) => {
-      await transaction.livePosition.updateMany({
+      await transaction.livePosition.deleteMany({
         where: {
           userId,
-          isActive: true,
-        },
-        data: {
-          isActive: false,
         },
       });
 

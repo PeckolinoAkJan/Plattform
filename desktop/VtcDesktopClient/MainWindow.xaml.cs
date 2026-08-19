@@ -17,7 +17,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         var settings = ClientSettings.Load();
         _telemetry = new TelemetryManager();
-        _api = new ApiClient(settings.BaseUrl, settings.ClientSecret, ClientSessionStore.LoadToken());
+        _api = new ApiClient(settings.BaseUrl, ClientSessionStore.LoadToken());
         _viewModel = new MainViewModel(_telemetry, _api, Dispatcher, settings.UpdateManifestUrl);
         DataContext = _viewModel;
         Loaded += MainWindow_Loaded;

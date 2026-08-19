@@ -13,7 +13,6 @@ const COMPANY_ID_KEY = 'vtc_active_company_id';
 const COMPANY_CHANGED_EVENT = 'vtc:company-changed';
 const AUTH_CHANGED_EVENT = 'vtc:auth-changed';
 const AUTH_EXPIRED_EVENT = 'vtc:auth-expired';
-const AUTH_TOKEN_STORAGE_KEY = 'vtc_access_token_fallback';
 const ROOM_REFRESH_MS = 420;
 const LIVE_MAP_SIMULATION_PARAM_KEYS = ['loadProbe', 'sim', 'probe'];
 const LIVE_MAP_SIMULATION_VALUES = new Set([500, 1000, 3000]);
@@ -111,7 +110,7 @@ function DashboardMapContent() {
     loadInitial();
 
     const onStorage = (event: StorageEvent) => {
-      if (event.key === COMPANY_ID_KEY || event.key === AUTH_TOKEN_STORAGE_KEY) {
+      if (event.key === COMPANY_ID_KEY) {
         scheduleRefresh();
       }
     };

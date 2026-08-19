@@ -12,7 +12,9 @@ RequestExecutionLevel user
 !endif
 
 !define ProductName "VTC Hub Desktop Client"
-!define ProductVersion "1.1.0"
+!ifndef ProductVersion
+  !define ProductVersion "1.1.1"
+!endif
 !define ProductPublisher "VTC Hub"
 !define ProductExe "VtcDesktopClient.exe"
 !define ProductRegKey "Software\Microsoft\Windows\CurrentVersion\Uninstall\VtcHubDesktopClient"

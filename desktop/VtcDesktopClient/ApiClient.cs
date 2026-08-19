@@ -17,18 +17,14 @@ namespace VtcDesktopClient;
 public sealed class ApiClient
 {
     private readonly HttpClient _httpClient;
-    private readonly string _clientSecret;
 
     public string BaseUrl { get; }
 
-    public string ClientSecret => _clientSecret;
-
     public string JwtToken { get; set; }
 
-    public ApiClient(string baseUrl, string clientSecret, string jwtToken)
+    public ApiClient(string baseUrl, string jwtToken)
     {
         BaseUrl = NormalizeBaseUrl(baseUrl);
-        _clientSecret = clientSecret?.Trim() ?? string.Empty;
         JwtToken = jwtToken?.Trim() ?? string.Empty;
 
         _httpClient = new HttpClient
@@ -144,17 +140,23 @@ public sealed class ApiClient
 
     private async Task<HttpResponseMessage> SendAsync<T>(string path, T payload, CancellationToken cancellationToken)
     {
+        var token = JwtToken?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            throw new InvalidOperationException("Anmeldung erforderlich.");
+        }
+
         var rawPayload = JsonSerializer.Serialize(payload, ApiJson.Default);
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
         var nonce = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
-        var signature = ComputeSignature(rawPayload, timestamp, nonce);
+        var signature = ComputeSignature(rawPayload, timestamp, nonce, token);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, path)
         {
             Content = new StringContent(rawPayload, Encoding.UTF8, "application/json"),
         };
 
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", JwtToken);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Headers.TryAddWithoutValidation("x-timestamp", timestamp);
         request.Headers.TryAddWithoutValidation("x-nonce", nonce);
         request.Headers.TryAddWithoutValidation("x-client-signature", signature);
@@ -162,11 +164,11 @@ public sealed class ApiClient
         return await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
     }
 
-    private string ComputeSignature(string body, string timestamp, string nonce)
+    private static string ComputeSignature(string body, string timestamp, string nonce, string signingKey)
     {
         var signingPayload = $"{body}{timestamp}{nonce}";
 
-        var secretBytes = Encoding.UTF8.GetBytes(_clientSecret);
+        var secretBytes = Encoding.UTF8.GetBytes(signingKey);
         var payloadBytes = Encoding.UTF8.GetBytes(signingPayload);
 
         using var hmac = new HMACSHA256(secretBytes);

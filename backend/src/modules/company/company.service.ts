@@ -263,7 +263,7 @@ export class CompanyService {
       throw new ForbiddenException("Du hast aktuell keine Spedition.");
     }
 
-    if (user.companyRole && user.companyRole !== "OWNER" && !updateCompanyDto.name && !updateCompanyDto.tag && !updateCompanyDto.description && !updateCompanyDto.countryCode && !updateCompanyDto.logoUrl) {
+    if (user.companyRole !== CompanyRole.OWNER) {
       throw new ForbiddenException("Du hast keine Berechtigung, Speditionsdaten zu ändern.");
     }
 

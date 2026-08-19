@@ -14,20 +14,24 @@
 - optional `PLESK_BACKEND_SERVICE_NAME`, `PLESK_FRONTEND_SERVICE_NAME`
 - optional `PLESK_BACKEND_PORT=3001`, `PLESK_FRONTEND_PORT=3000`
 
-Laufzeit-Secrets wie `DATABASE_URL`, `JWT_SECRET`, `CLIENT_SECRET`, Redis- und OAuth-Secrets werden im geschuetzten Plesk-Environment gepflegt und nicht in GitHub-Artefakte geschrieben.
+Laufzeit-Secrets wie `DATABASE_URL`, `JWT_SECRET`, Redis- und OAuth-Secrets werden in persistenten, nur fuer den App-Benutzer lesbaren Dateien auf dem Server gepflegt und nicht in GitHub-Artefakte geschrieben:
+
+- Backend: `<PLESK_BACKEND_DIR>/shared/.env`
+- Frontend: `<PLESK_FRONTEND_DIR>/shared/.env.production`
+
+Als Ausgangspunkt dienen `backend/.env.production.example` und `frontend/.env.production.example`. Beide Serverdateien muessen vor dem ersten Workflow-Lauf existieren und mit `chmod 600` geschuetzt werden. `SESSION_COOKIE_DOMAIN` im Frontend muss zu `OAUTH_COOKIE_DOMAIN` im Backend passen.
 
 Fuer Social Login muessen dort ausserdem `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `STEAM_API_KEY`, `BACKEND_URL`, `FRONTEND_URL` und `OAUTH_COOKIE_DOMAIN` gesetzt sein. Die Provider-Konsole muss dieselben HTTPS-Callback-URLs enthalten, die in `INSTALLATION.md` dokumentiert sind.
 
 ## Deploymentverhalten
 
-Die GitHub-Workflows und `scripts/plesk/deploy-*.sh` verwenden pnpm, bauen vor dem Umschalten, wenden Prisma-Migrationen an, speichern Uploads unter `shared/uploads`, wechseln den `current`-Symlink atomar und behalten die letzten fuenf Releases. Nach dem Prozessstart muss der Healthcheck erfolgreich sein.
+Die GitHub-Workflows und `scripts/plesk/deploy-*.sh` verwenden pnpm, bauen vor dem Umschalten, erstellen mit `pg_dump` ein Custom-Format-Backup, wenden danach Prisma-Migrationen an, speichern Uploads unter `shared/uploads`, wechseln den `current`-Symlink atomar und behalten die letzten fuenf Releases sowie zehn Pre-Deploy-Backups. Nach dem Prozessstart muss der Healthcheck innerhalb von 40 Sekunden erfolgreich sein.
 
 Manueller Backendaufruf:
 
 ```bash
 export PLESK_BACKEND_DIR=/var/www/vhosts/example/api-vtchub
 export PLESK_BACKEND_PORT=3001
-export DATABASE_URL='postgresql://...'
 bash scripts/plesk/deploy-backend.sh /tmp/backend-release.tgz
 ```
 

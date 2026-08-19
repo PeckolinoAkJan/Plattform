@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, ForbiddenException, Get, Post, Query, UseGuards } from "@nestjs/common";
+import { ClientSignatureGuard } from "../../common/guards/client-signature.guard";
 import { CurrentUser, type CurrentUserValue } from "../../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { CreateConvoyDto } from "./dto/create-convoy.dto";
@@ -20,7 +21,12 @@ export class MapController {
     @CurrentUser() user: CurrentUserValue,
     @Query() query: GetLivePositionsQueryDto,
   ) {
-    const companyId = query?.companyId?.trim() || user.companyId || undefined;
+    const requestedCompanyId = query?.companyId?.trim();
+    if (requestedCompanyId && requestedCompanyId !== user.companyId) {
+      throw new ForbiddenException("Du darfst nur Live-Positionen deiner eigenen Spedition abrufen.");
+    }
+
+    const companyId = user.companyId ?? null;
     return this.mapService.getLivePositions({ companyId, maxAgeMinutes: query?.maxAgeMinutes });
   }
 
@@ -30,6 +36,7 @@ export class MapController {
   }
 
   @Post("update-telemetry")
+  @UseGuards(ClientSignatureGuard)
   async updateTelemetry(
     @CurrentUser() user: CurrentUserValue,
     @Body() body: UpdateTelemetryDto,

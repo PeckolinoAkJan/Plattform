@@ -132,8 +132,8 @@ public sealed class TelemetryManager : IDisposable
             SpeedKmh = (int)Math.Round(Math.Abs(dashboard.Speed.Kph)),
             DriverName = Environment.UserName,
             UserStatus = data.JobValues.CargoLoaded ? "ON DUTY" : "READY",
-            Latitude = position.Position.X,
-            Longitude = position.Position.Z,
+            // SCS X/Z values are game-world coordinates, not geographic WGS84 coordinates.
+            // Latitude/Longitude intentionally remain unset until a calibrated projection is available.
             Heading = NormalizeHeading(position.Orientation.Heading * 360d),
             DamagePct = maxDamage,
             DistanceKm = data.JobValues.PlannedDistanceKm,

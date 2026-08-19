@@ -19,10 +19,13 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
   ) {
-    this.localLoginPassword = this.configService.get<string>("NODE_ENV") === "production"
-      ? undefined
-      : this.configService.get<string>("LOCAL_LOGIN_PASSWORD")?.trim();
-    this.localLoginPasswordHash = this.configService.get<string>("LOCAL_LOGIN_PASSWORD_HASH")?.trim();
+    const developmentLoginEnabled = this.configService.get<string>("NODE_ENV") !== "production";
+    this.localLoginPassword = developmentLoginEnabled
+      ? this.configService.get<string>("LOCAL_LOGIN_PASSWORD")?.trim()
+      : undefined;
+    this.localLoginPasswordHash = developmentLoginEnabled
+      ? this.configService.get<string>("LOCAL_LOGIN_PASSWORD_HASH")?.trim()
+      : undefined;
     this.localLoginPasswordSalt = this.configService.get<string>("LOCAL_LOGIN_PASSWORD_SALT")?.trim();
   }
 
@@ -58,24 +61,6 @@ export class AuthService {
       throw new UnauthorizedException("Ungültige Zugangsdaten.");
     }
 
-    if (this.localLoginPassword && this.compareStringConstantTime(password, this.localLoginPassword)) {
-      return {
-        token: this.generateToken(user),
-        user,
-      };
-    }
-
-    if (this.localLoginPasswordHash) {
-      const expectedHash = this.hashPassword(password, this.localLoginPasswordSalt);
-      if (this.compareStringConstantTime(expectedHash, this.localLoginPasswordHash)) {
-        return {
-          token: this.generateToken(user),
-          user,
-        };
-      }
-      throw new UnauthorizedException("Ungültige Zugangsdaten.");
-    }
-
     const userPasswordHash = user.passwordHash;
     if (typeof userPasswordHash === "string" && userPasswordHash.length > 0) {
       if (userPasswordHash.startsWith("$2") && await compareBcrypt(password, userPasswordHash)) {
@@ -86,7 +71,7 @@ export class AuthService {
       }
 
       const expectedHash = this.hashPassword(password, this.localLoginPasswordSalt);
-      if (this.compareStringConstantTime(expectedHash, userPasswordHash)) {
+      if (expectedHash && this.compareStringConstantTime(expectedHash, userPasswordHash)) {
         return {
           token: this.generateToken(user),
           user,
@@ -94,9 +79,24 @@ export class AuthService {
       }
     }
 
-    throw new UnauthorizedException(
-      "Lokaler Login ist nicht konfiguriert. Bitte nutze OAuth oder richte LOCAL_LOGIN_PASSWORD ein.",
-    );
+    if (this.localLoginPassword && this.compareStringConstantTime(password, this.localLoginPassword)) {
+      return {
+        token: this.generateToken(user),
+        user,
+      };
+    }
+
+    if (this.localLoginPasswordHash) {
+      const expectedHash = this.hashPassword(password, this.localLoginPasswordSalt);
+      if (expectedHash && this.compareStringConstantTime(expectedHash, this.localLoginPasswordHash)) {
+        return {
+          token: this.generateToken(user),
+          user,
+        };
+      }
+    }
+
+    throw new UnauthorizedException("Ungültige Zugangsdaten.");
   }
 
   async handleOAuthProfile(profile: SocialAuthProfile): Promise<User> {

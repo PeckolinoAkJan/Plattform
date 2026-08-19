@@ -20,6 +20,18 @@ import { LocalLoginDto } from "./dto/local-login.dto";
 
 const OAUTH_FLOW_COOKIE = "vtc_oauth_flow";
 
+const isConfiguredValue = (value: string | undefined): boolean => {
+  const normalized = value?.trim();
+  if (!normalized) return false;
+  return !/^(?:oauth-disabled|your_|change_me|replace_with)/i.test(normalized);
+};
+
+const ensureProviderConfigured = (config: ConfigService, keys: string[]): void => {
+  if (!keys.every((key) => isConfiguredValue(config.get<string>(key)))) {
+    throw new BadRequestException("Dieser OAuth-Anbieter ist noch nicht konfiguriert.");
+  }
+};
+
 const flowCookieOptions = (config: ConfigService): CookieOptions => ({
   httpOnly: true,
   secure: config.get<string>("NODE_ENV") === "production",
@@ -34,6 +46,7 @@ export class GoogleLoginGuard extends AuthGuard("google") {
   constructor(private readonly authService: AuthService, private readonly config: ConfigService) { super(); }
 
   getAuthenticateOptions(context: ExecutionContext) {
+    ensureProviderConfigured(this.config, ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]);
     const req = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
     const flow = this.authService.createOAuthFlow("google", req.query as Record<string, unknown>);
@@ -51,6 +64,7 @@ export class DiscordLoginGuard extends AuthGuard("discord") {
   constructor(private readonly authService: AuthService, private readonly config: ConfigService) { super(); }
 
   getAuthenticateOptions(context: ExecutionContext) {
+    ensureProviderConfigured(this.config, ["DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"]);
     const req = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
     const flow = this.authService.createOAuthFlow("discord", req.query as Record<string, unknown>);
@@ -68,6 +82,7 @@ export class SteamLoginGuard extends AuthGuard("steam") {
   constructor(private readonly authService: AuthService, private readonly config: ConfigService) { super(); }
 
   getAuthenticateOptions(context: ExecutionContext) {
+    ensureProviderConfigured(this.config, ["STEAM_API_KEY"]);
     const req = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
     const flow = this.authService.createOAuthFlow("steam", req.query as Record<string, unknown>);
@@ -172,14 +187,10 @@ export class AuthController {
 
   @Get("providers")
   providers() {
-    const configured = (key: string) => {
-      const value = this.config.get<string>(key)?.trim();
-      return Boolean(value && value !== "oauth-disabled" && !value.startsWith("your_"));
-    };
     return {
-      google: configured("GOOGLE_CLIENT_ID") && configured("GOOGLE_CLIENT_SECRET"),
-      discord: configured("DISCORD_CLIENT_ID") && configured("DISCORD_CLIENT_SECRET"),
-      steam: configured("STEAM_API_KEY"),
+      google: isConfiguredValue(this.config.get<string>("GOOGLE_CLIENT_ID")) && isConfiguredValue(this.config.get<string>("GOOGLE_CLIENT_SECRET")),
+      discord: isConfiguredValue(this.config.get<string>("DISCORD_CLIENT_ID")) && isConfiguredValue(this.config.get<string>("DISCORD_CLIENT_SECRET")),
+      steam: isConfiguredValue(this.config.get<string>("STEAM_API_KEY")),
     };
   }
 
@@ -218,7 +229,11 @@ export class AuthController {
     for (const part of raw.split(";")) {
       const separator = part.indexOf("=");
       if (separator < 0 || part.slice(0, separator).trim() !== name) continue;
-      return decodeURIComponent(part.slice(separator + 1).trim());
+      try {
+        return decodeURIComponent(part.slice(separator + 1).trim());
+      } catch {
+        return undefined;
+      }
     }
     return undefined;
   }

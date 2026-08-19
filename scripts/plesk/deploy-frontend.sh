@@ -13,10 +13,13 @@ command -v pm2 >/dev/null 2>&1 || { echo "pm2 is required"; exit 1; }
 command -v corepack >/dev/null 2>&1 || { echo "Node.js corepack is required"; exit 1; }
 test -f "$PACKAGE_FILE" || { echo "Package not found: $PACKAGE_FILE"; exit 1; }
 
-mkdir -p "$RELEASE"
+mkdir -p "$RELEASE" "$APP_ROOT/shared"
+ENV_FILE="$APP_ROOT/shared/.env.production"
+test -f "$ENV_FILE" || { echo "Persistent frontend configuration missing: $ENV_FILE"; exit 1; }
 tar -xzf "$PACKAGE_FILE" -C "$RELEASE"
 APP_DIR="$RELEASE/frontend"
 test -f "$APP_DIR/package.json" || { echo "frontend/package.json missing in package"; exit 1; }
+ln -sfn "$ENV_FILE" "$APP_DIR/.env.production"
 
 cd "$APP_DIR"
 corepack pnpm install --frozen-lockfile
@@ -30,6 +33,14 @@ pm2 delete "$SERVICE_NAME" >/dev/null 2>&1 || true
 NODE_ENV=production PORT="$PORT" pm2 start "$(command -v corepack)" --name "$SERVICE_NAME" --cwd "$APP_ROOT/current" -- pnpm start --port "$PORT"
 pm2 save
 
-curl --fail --silent --show-error "http://127.0.0.1:$PORT/" >/dev/null
+healthy=false
+for attempt in $(seq 1 20); do
+  if curl --fail --silent --show-error "http://127.0.0.1:$PORT/" >/dev/null; then
+    healthy=true
+    break
+  fi
+  sleep 2
+done
+test "$healthy" = true || { echo "Frontend health check failed on port $PORT"; exit 1; }
 find "$RELEASES" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -nr | tail -n +6 | cut -d' ' -f2- | xargs -r rm -rf
 echo "Frontend release $RELEASE_ID deployed successfully."

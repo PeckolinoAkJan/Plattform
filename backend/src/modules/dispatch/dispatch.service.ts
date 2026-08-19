@@ -72,19 +72,24 @@ export class DispatchService {
     });
   }
 
-  async getAvailableJobs(companyId: string) {
-    const company = await this.prisma.company.findUnique({
-      where: { id: companyId },
+  async getAvailableJobs(userId: string, companyId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { companyId: true },
     });
 
-    if (!company) {
-      throw new NotFoundException("Firma wurde nicht gefunden.");
+    if (!user || user.companyId !== companyId) {
+      throw new ForbiddenException("Du darfst nur Aufträge deiner eigenen Firma abrufen.");
     }
 
     return this.prisma.dispatchJob.findMany({
       where: {
         companyId,
         status: DispatchJobStatus.OPEN,
+        OR: [
+          { assignedToId: null },
+          { assignedToId: userId },
+        ],
       },
       orderBy: { createdAt: "desc" },
     });
@@ -124,13 +129,31 @@ export class DispatchService {
       throw new BadRequestException("Der Auftrag ist nicht mehr offen.");
     }
 
-    return this.prisma.dispatchJob.update({
-      where: { id: jobId },
+    if (job.assignedToId && job.assignedToId !== driver.id) {
+      throw new ForbiddenException("Der Auftrag ist bereits einem anderen Fahrer zugewiesen.");
+    }
+
+    const accepted = await this.prisma.dispatchJob.updateMany({
+      where: {
+        id: jobId,
+        companyId: driver.companyId,
+        status: DispatchJobStatus.OPEN,
+        OR: [
+          { assignedToId: null },
+          { assignedToId: driver.id },
+        ],
+      },
       data: {
         assignedToId: driver.id,
         status: DispatchJobStatus.ACCEPTED,
       },
     });
+
+    if (accepted.count !== 1) {
+      throw new BadRequestException("Der Auftrag wurde zwischenzeitlich bereits angenommen.");
+    }
+
+    return this.prisma.dispatchJob.findUniqueOrThrow({ where: { id: jobId } });
   }
 
   async updateJobStatus(userId: string, jobId: string, dto: UpdateJobStatusDto) {

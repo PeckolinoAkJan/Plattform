@@ -1154,7 +1154,7 @@ export default function LiveMap({ companyId, simulationDriverCount }: LiveMapPro
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
-      if (event.key === 'vtc_active_company_id' || event.key === 'vtc_access_token_fallback') {
+      if (event.key === 'vtc_active_company_id') {
         scheduleRejoin();
       }
     };

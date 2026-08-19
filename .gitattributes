@@ -1,0 +1,10 @@
+* text=auto eol=lf
+
+# Keep deployment and workflow files executable/parseable on Linux runners and Plesk.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Native Windows command scripts are the only text files that require CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf

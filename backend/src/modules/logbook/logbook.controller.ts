@@ -15,22 +15,6 @@ export class LogbookController {
     return this.logbookService.getTripsForUser(user.userId);
   }
 
-  @Post()
-  @UseGuards(JwtAuthGuard)
-  async submitTripFromDashboard(
-    @CurrentUser() user: CurrentUserValue,
-    @Body() submitTripDto: SubmitTripDto,
-  ) {
-    const result = await this.logbookService.submitTrip(user.userId, submitTripDto);
-
-    return {
-      message: "Fahrt erfolgreich übermittelt",
-      tripId: result.id,
-      category: result.mode,
-      payload: result.payload,
-    };
-  }
-
   @Post("submit")
   @UseGuards(JwtAuthGuard, ClientSignatureGuard)
   async submitTrip(

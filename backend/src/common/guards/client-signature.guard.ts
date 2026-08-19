@@ -5,13 +5,11 @@ import {
   ForbiddenException,
   Injectable,
 } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { RedisService } from "../redis/redis.service";
 
 @Injectable()
 export class ClientSignatureGuard implements CanActivate {
   constructor(
-    private readonly configService: ConfigService,
     private readonly redis: RedisService,
   ) {}
 
@@ -27,7 +25,10 @@ export class ClientSignatureGuard implements CanActivate {
       throw new ForbiddenException("Invalid client signature");
     }
 
-    const secret = this.configService.get<string>("CLIENT_SECRET");
+    const authorization = this.getHeaderValue(request.headers.authorization);
+    const secret = authorization?.startsWith("Bearer ")
+      ? authorization.slice("Bearer ".length).trim()
+      : undefined;
 
     if (!secret) {
       throw new ForbiddenException("Invalid client signature");

@@ -63,6 +63,16 @@ public sealed class ClientAutoUpdater
                 };
             }
 
+            if (manifestUri.Scheme != Uri.UriSchemeHttps && !manifestUri.IsLoopback)
+            {
+                return new ClientUpdateCheckResult
+                {
+                    Success = false,
+                    ErrorMessage = "Update-Manifest muss über HTTPS geladen werden.",
+                    CurrentVersion = currentVersion,
+                };
+            }
+
             using var response = await _httpClient.GetAsync(manifestUri, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
@@ -132,12 +142,6 @@ public sealed class ClientAutoUpdater
 
         if (downloadUri.Scheme != Uri.UriSchemeHttps && !downloadUri.IsLoopback) return false;
 
-        var currentExecutable = ResolveCurrentExecutable();
-        if (string.IsNullOrWhiteSpace(currentExecutable))
-        {
-            return false;
-        }
-
         var workingDir = Path.Combine(Path.GetTempPath(), "VtcHubClient", "Updates");
         Directory.CreateDirectory(workingDir);
         var downloadFile = Path.Combine(workingDir, $"VtcHubClient-Update-{DateTime.UtcNow:yyyyMMddHHmmss}.exe");
@@ -166,35 +170,10 @@ public sealed class ClientAutoUpdater
             }
         }
 
-        var scriptPath = Path.Combine(workingDir, "apply-update.ps1");
-        var processName = Path.GetFileNameWithoutExtension(currentExecutable);
-        var script = @$"
-param(
-    [Parameter(Mandatory = $true)] [string]$CurrentExecutable,
-    [Parameter(Mandatory = $true)] [string]$DownloadedExecutable,
-    [Parameter(Mandatory = $true)] [string]$ProcessName
-)
-
-Start-Sleep -Milliseconds 900
-while (Get-Process -Name $ProcessName -ErrorAction SilentlyContinue) {{
-    Start-Sleep -Milliseconds 400
-}}
-
-Move-Item -Force -Path $DownloadedExecutable -Destination $CurrentExecutable
-Start-Sleep -Milliseconds 350
-Start-Process -FilePath $CurrentExecutable
-Remove-Item -Force -Path $PSCommandPath
-";
-
-        await File.WriteAllTextAsync(scriptPath, script, cancellationToken).ConfigureAwait(false);
-
-        var arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{scriptPath}\" \"{currentExecutable}\" \"{downloadFile}\" \"{processName}\"";
         Process.Start(new ProcessStartInfo
         {
-            FileName = "powershell.exe",
-            Arguments = arguments,
-            CreateNoWindow = true,
-            UseShellExecute = false,
+            FileName = downloadFile,
+            UseShellExecute = true,
         });
 
         return true;
@@ -235,15 +214,4 @@ Remove-Item -Force -Path $PSCommandPath
         return new Version(version.Major, version.Minor, version.Build < 0 ? 0 : version.Build, version.Revision < 0 ? 0 : version.Revision);
     }
 
-    private static string? ResolveCurrentExecutable()
-    {
-        try
-        {
-            return Environment.ProcessPath;
-        }
-        catch
-        {
-            return null;
-        }
-    }
 }

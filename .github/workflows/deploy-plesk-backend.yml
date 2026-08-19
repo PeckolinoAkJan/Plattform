@@ -87,6 +87,7 @@ jobs:
           key: ${{ secrets.PLESK_SSH_KEY }}
           source: .artifacts/backend-${{ github.sha }}.tgz
           target: /tmp/vtc-deploy
+          strip_components: 1
 
       - name: Deploy on Plesk
         uses: appleboy/ssh-action@v1.0.3
@@ -102,7 +103,7 @@ jobs:
             APP_USER="${{ secrets.PLESK_APP_USER || secrets.PLESK_USER }}"
             SERVICE_NAME="${{ secrets.PLESK_BACKEND_SERVICE_NAME || 'vtc-backend' }}"
             NODE_ENV="${{ secrets.PLESK_NODE_ENV || 'production' }}"
-            PORT="${{ secrets.PLESK_BACKEND_PORT || '3000' }}"
+            PORT="${{ secrets.PLESK_BACKEND_PORT || '3001' }}"
             RELEASE_FILE="/tmp/vtc-deploy/backend-${{ github.sha }}.tgz"
             RELEASE_DIR="/tmp/vtc-backend-release"
 
@@ -117,10 +118,16 @@ jobs:
             tar -xzf "$RELEASE_FILE" -C "$RELEASE_DIR"
 
             RELEASE_PATH="$APP_DIR/releases/${{ github.sha }}"
-            mkdir -p "$APP_DIR/releases" "$APP_DIR/shared/uploads"
+            mkdir -p "$APP_DIR/releases" "$APP_DIR/shared/uploads" "$APP_DIR/shared/backups"
+            ENV_FILE="$APP_DIR/shared/.env"
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "Persistente Backend-Konfiguration fehlt: $ENV_FILE"
+              exit 1
+            fi
             rm -rf "$RELEASE_PATH"
             mv "$RELEASE_DIR"/backend "$RELEASE_PATH"
             ln -sfn "$APP_DIR/shared/uploads" "$RELEASE_PATH/uploads"
+            ln -sfn "$ENV_FILE" "$RELEASE_PATH/.env"
 
             cd "$RELEASE_PATH"
             chown -R "$APP_USER":"$APP_USER" .
@@ -128,6 +135,16 @@ jobs:
             corepack pnpm install --frozen-lockfile
             corepack pnpm run build
             corepack pnpm run prisma:generate
+
+            command -v pg_dump >/dev/null 2>&1 || { echo "pg_dump is required before migrations"; exit 1; }
+            DATABASE_URL_VALUE="$(sed -n 's/^DATABASE_URL=//p' "$ENV_FILE" | tail -n 1 | tr -d '\r')"
+            if [ -z "$DATABASE_URL_VALUE" ]; then
+              echo "DATABASE_URL fehlt in $ENV_FILE"
+              exit 1
+            fi
+            BACKUP_FILE="$APP_DIR/shared/backups/pre-deploy-${{ github.sha }}-$(date -u +%Y%m%d%H%M%S).dump"
+            pg_dump --format=custom --file="$BACKUP_FILE" "$DATABASE_URL_VALUE"
+
             corepack pnpm run prisma:migrate:deploy
             corepack pnpm prune --prod
 
@@ -145,5 +162,19 @@ jobs:
               exit 1
             fi
 
+            healthy=false
+            for attempt in $(seq 1 20); do
+              if curl --fail --silent --show-error "http://127.0.0.1:$PORT/api/health" >/dev/null; then
+                healthy=true
+                break
+              fi
+              sleep 2
+            done
+            if [ "$healthy" != true ]; then
+              echo "Backend health check failed on port $PORT."
+              exit 1
+            fi
+
             echo "Backend deployed and started via pm2 as $SERVICE_NAME on port $PORT"
+            find "$APP_DIR/shared/backups" -mindepth 1 -maxdepth 1 -type f -name 'pre-deploy-*.dump' -printf '%T@ %p\n' | sort -nr | tail -n +11 | cut -d' ' -f2- | xargs -r rm -f
             find "$APP_DIR/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -nr | tail -n +6 | cut -d' ' -f2- | xargs -r rm -rf

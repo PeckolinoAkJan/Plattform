@@ -47,6 +47,9 @@ importers:
       class-validator:
         specifier: ^0.14.4
         version: 0.14.4
+      dotenv:
+        specifier: 17.4.1
+        version: 17.4.1
       express:
         specifier: ^5.1.0
         version: 5.2.1(supports-color@8.1.1)

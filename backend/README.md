@@ -1,10 +1,10 @@
 # VTC Platform Backend (NestJS + Prisma)
 
-Dieser Ordner enthält den initialen Backend-Kern für die Plattform nach deinem Lastenheft.
+Dieser Ordner enthält die produktionsnahe NestJS-API der VTC-Hub-Plattform.
 
 ## Module
 
-- `auth`: Steam-Login/Callback, später JWT-Session.
+- `auth`: lokaler Login, Google, Discord und Steam, HttpOnly-Websession, Desktop-PKCE und JWT.
 - `user`: Nutzerprofil, Rollen, Statistiken/Awards-Ansicht.
 - `company`: VTC-Gründung, Mitgliedschaften, Wall, Bewerbungen.
 - `logbook`: Telemetrie-Ingestion, Fahrtenklassifizierung (Real/Race/Invalid), Trip-Details.
@@ -33,12 +33,10 @@ Wichtige Entitäten:
 ## Start
 
 1. `.env.example` nach `.env` kopieren.
-2. `npm install`
-3. `npm run prisma:migrate` (oder manuell Migrationen anlegen)
-4. `npm run start:dev`
+2. `pnpm install --frozen-lockfile`
+3. `pnpm run prisma:migrate:deploy`
+4. `pnpm run start:dev`
 
-## Nächste konkrete Schritte
+## Sicherheitsvertrag des Desktop-Clients
 
-1. Auth-Flow mit Steam OpenID + Steam Web API anschließen.
-2. Logik: Trip-Validierung + Real/Race/Invalid-Klassifikation nach ETS2/ATS Limits.
-3. WebSocket-Kanäle für Live-Map und Dispatch-Events.
+Telemetrie-Endpunkte benötigen einen gültigen Benutzer-JWT. Der Request-Body wird zusätzlich mit demselben kurzlebigen JWT über HMAC-SHA256 signiert; Timestamp und Redis-Nonce verhindern Wiederholungen. Dadurch muss kein globales HMAC-Secret in einem öffentlichen Installer ausgeliefert werden.
