@@ -29,11 +29,11 @@ jobs:
 
       - name: Publish single-file x64
         run: |
-          dotnet publish "desktop/VtcDesktopClient/VtcDesktopClient.csproj" \
-            -c Release -r win-x64 \
-            --self-contained true \
-            -p:PublishSingleFile=true \
-            -p:IncludeNativeLibrariesForSelfExtract=true \
+          dotnet publish "desktop/VtcDesktopClient/VtcDesktopClient.csproj" `
+            -c Release -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
             -o "desktop/.artifacts"
 
       - name: Create release archive
