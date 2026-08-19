@@ -22,8 +22,8 @@ UninstallDisplayName=VTC Hub Client
 ArchitecturesInstallIn64BitMode=x64
 
 [Languages]
-Name: "german"; MessagesFile: "compiler:Default.isl"
-Name: "english"; MessagesFile: "compiler:Languages\\English.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "german"; MessagesFile: "compiler:Languages\\German.isl"
 
 [Dirs]
 Name: "{app}"
