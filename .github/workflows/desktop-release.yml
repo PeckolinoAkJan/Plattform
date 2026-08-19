@@ -1,0 +1,49 @@
+name: Release Desktop Client
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-desktop:
+    name: Build & Publish Windows Client
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore "desktop/VtcDesktopClient/VtcDesktopClient.csproj"
+
+      - name: Publish single-file x64
+        run: |
+          dotnet publish "desktop/VtcDesktopClient/VtcDesktopClient.csproj" \
+            -c Release -r win-x64 \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -o "desktop/.artifacts"
+
+      - name: Create release archive
+        run: |
+          New-Item -ItemType Directory -Path "desktop/.artifacts/zips" -Force | Out-Null
+          Compress-Archive -Path "desktop/.artifacts/*" -DestinationPath "desktop/.artifacts/VtcDesktopClient-${{ github.ref_name }}-win-x64.zip" -Force
+
+      - name: Publish on GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            desktop/.artifacts/VtcDesktopClient-${{ github.ref_name }}-win-x64.zip
+          generate_release_notes: true

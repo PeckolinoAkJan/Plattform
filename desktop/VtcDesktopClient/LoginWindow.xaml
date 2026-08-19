@@ -1,0 +1,23 @@
+<Window x:Class="VtcDesktopClient.LoginWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="VTC Hub Login" Width="430" Height="570" WindowStartupLocation="CenterOwner" WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize" FontFamily="Bahnschrift" Loaded="LoginWindow_Loaded">
+    <Border CornerRadius="22" Background="#0D1116" BorderBrush="#8A6B22" BorderThickness="1" Padding="32">
+        <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <StackPanel><TextBlock Text="VTC HUB" Foreground="#F2CD67" FontSize="25" FontWeight="Bold"/><TextBlock Text="DRIVER AUTHENTICATION" Foreground="#8E949C" Margin="0,4,0,0"/></StackPanel>
+            <StackPanel Grid.Row="1" Margin="0,28,0,0">
+                <TextBlock Text="EMAIL" Foreground="#C7A94C" FontSize="11"/><TextBox x:Name="EmailBox" Height="44" Margin="0,7,0,18" Padding="12" Background="#131920" Foreground="White" BorderBrush="#4B4025"/>
+                <TextBlock Text="PASSWORD" Foreground="#C7A94C" FontSize="11"/><PasswordBox x:Name="PasswordBox" Height="44" Margin="0,7,0,12" Padding="12" Background="#131920" Foreground="White" BorderBrush="#4B4025"/>
+                <TextBlock Text="OR CONTINUE WITH" Foreground="#8E949C" FontSize="10" HorizontalAlignment="Center" Margin="0,5,0,10"/>
+                <StackPanel x:Name="ProviderPanel">
+                    <Button x:Name="GoogleButton" Content="GOOGLE" Tag="google" Height="36" Margin="0,0,0,7" Background="#F5F5F5" Foreground="#111318" BorderBrush="#FFFFFF" FontWeight="SemiBold" Click="OAuth_Click"/>
+                    <Button x:Name="DiscordButton" Content="DISCORD" Tag="discord" Height="36" Margin="0,0,0,7" Background="#5865F2" Foreground="White" BorderBrush="#7983F5" FontWeight="SemiBold" Click="OAuth_Click"/>
+                    <Button x:Name="SteamButton" Content="STEAM" Tag="steam" Height="36" Margin="0,0,0,10" Background="#1B2838" Foreground="White" BorderBrush="#66C0F4" FontWeight="SemiBold" Click="OAuth_Click"/>
+                </StackPanel>
+                <TextBlock x:Name="ErrorText" Foreground="#F87171" TextWrapping="Wrap" MinHeight="32"/>
+            </StackPanel>
+            <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                <Button Content="CANCEL" Height="42" Margin="0,0,6,0" Background="#151A20" Foreground="#B9BDC3" BorderBrush="#454A50" Click="Cancel_Click"/>
+                <Button x:Name="LoginButton" Grid.Column="1" Content="LOG IN" Height="42" Margin="6,0,0,0" Background="#D9A928" Foreground="#080A0C" BorderBrush="#F2CD67" FontWeight="Bold" Click="Login_Click"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

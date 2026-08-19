@@ -1,0 +1,527 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum GlobalRole {
+  LONER
+  EMPLOYEE
+  DISPATCHER
+  OWNER
+  PREMIUM
+  ADMIN
+}
+
+enum CompanyRole {
+  DRIVER
+  DISPATCHER
+  OWNER
+}
+
+enum MembershipStatus {
+  PENDING
+  ACTIVE
+  BLOCKED
+  REVOKED
+}
+
+enum CompanyApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum Game {
+  ETS2
+  ATS
+}
+
+enum TripMode {
+  REAL
+  RACE
+  INVALID
+}
+
+enum DispatchJobType {
+  PERSONAL
+  COMPANY
+}
+
+enum DispatchJobStatus {
+  OPEN
+  ASSIGNED
+  ACCEPTED
+  DRIVING
+  COMPLETED
+  CANCELLED
+}
+
+enum JobVisibility {
+  OPEN
+  ASSIGNED
+}
+
+enum ConvoyStatus {
+  PLANNED
+  IN_PROGRESS
+  FINISHED
+  CANCELLED
+}
+
+enum ConvoyParticipantRole {
+  DRIVER
+  SUPPORT
+}
+
+enum AggregationScope {
+  PLAYER
+  COMPANY
+  COUNTRY
+}
+
+enum LeaderboardPeriod {
+  MONTH
+  YEAR
+  ALL_TIME
+}
+
+model User {
+  id                String          @id @default(uuid())
+  email             String?         @unique
+  steamId           String          @unique
+  displayName       String
+  avatarUrl         String?
+  isPremium         Boolean         @default(false)
+  globalRoles       GlobalRole[]
+  companyId         String?
+  companyRole       CompanyRole?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  profileVisibility String          @default("private")
+  passwordHash      String?
+
+  steamAccount      SteamAccount?
+  socialAccounts    SocialAccount[]
+  company           Company?        @relation("UserCurrentCompany", fields: [companyId], references: [id], onDelete: SetNull)
+  memberships       CompanyMembership[] @relation("MembershipUser")
+  membershipInvites CompanyMembership[] @relation("MembershipInviter")
+  createdCompanies  Company[]       @relation("CompanyOwner")
+  wallPosts         CompanyPost[]
+  wallComments      CompanyPostComment[]
+  applicationOwner  CompanyJoinRequest[] @relation("JoinRequestApplicant")
+  reviewedJoinRequests CompanyJoinRequest[] @relation("JoinRequestReviewer")
+  companyApplications CompanyApplication[]
+  stats             UserStat?
+  createdJobs       DispatchJob[]
+  assignedJobs      DispatchJob[]   @relation("JobAssignment")
+  tripRecords       TripRecord[]
+  telemetryBatches  TelemetryIngestionAudit[]
+  livePositions     LivePosition[]
+  createdConvoys    Convoy[]
+  convoyRoles       ConvoyParticipant[]
+  awards            UserAward[]
+  monthlyRankHistory MonthlyRankHistory[]
+
+  @@index([steamId])
+}
+
+model SocialAccount {
+  id             String   @id @default(uuid())
+  userId         String
+  provider       String
+  providerUserId String
+  providerEmail  String?
+  avatarUrl      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId, provider])
+}
+
+model SteamAccount {
+  id                     String   @id @default(uuid())
+  userId                 String   @unique
+  steamId                String   @unique
+  personaName            String
+  profileUrl             String?
+  avatarUrl              String?
+  visibilityState        Int      @default(0)
+  hasPublicProfile       Boolean  @default(false)
+  ownsETS2               Boolean  @default(false)
+  ownsATS                Boolean  @default(false)
+  lastCheckedAt          DateTime @updatedAt
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([steamId])
+}
+
+model LegacyImportAudit {
+  id             String   @id @default(uuid())
+  exportId       String   @unique
+  manifestSha256 String
+  sourceSystem   String
+  importedCounts Json
+  importedAt     DateTime @default(now())
+}
+
+model Company {
+  id               String                @id @default(uuid())
+  name             String                @unique
+  tag              String?
+  description      String?
+  slug             String                @unique
+  countryCode      String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  isActive         Boolean               @default(true)
+  ownerId          String
+  logoUrl          String?
+
+  owner            User                  @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members          User[]                @relation("UserCurrentCompany")
+  applications     CompanyApplication[]
+  memberships      CompanyMembership[]
+  joinRequests     CompanyJoinRequest[]
+  posts            CompanyPost[]
+  jobs             DispatchJob[]
+  convoys          Convoy[]
+  companyLivePositions LivePosition[]
+  monthlyRankHistory MonthlyRankHistory[]
+
+  @@index([slug])
+  @@index([ownerId])
+}
+
+model CompanyMembership {
+  id                String           @id @default(uuid())
+  userId            String
+  companyId         String
+  companyRole       CompanyRole      @default(DRIVER)
+  membershipStatus  MembershipStatus @default(PENDING)
+  monthlyKmLimit    Int?
+  monthlyKmCurrent  Int              @default(0)
+  invitedById       String?
+  invitedAt         DateTime?
+  joinedAt          DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  user              User             @relation("MembershipUser", fields: [userId], references: [id], onDelete: Cascade)
+  company           Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invitedBy         User?            @relation("MembershipInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@unique([userId, companyId])
+  @@index([companyId, companyRole, membershipStatus])
+}
+
+model CompanyPost {
+  id          String              @id @default(uuid())
+  companyId   String
+  authorId    String
+  title       String
+  content     String
+  mediaUrl    String?
+  isPinned    Boolean             @default(false)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  author      User                @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments    CompanyPostComment[]
+
+  @@index([companyId, createdAt])
+}
+
+model CompanyPostComment {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  post      CompanyPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CompanyJoinRequest {
+  id             String           @id @default(uuid())
+  companyId      String
+  applicantId    String
+  status         MembershipStatus @default(PENDING)
+  formPayload    Json?
+  reviewMessage  String?
+  reviewedById   String?
+  reviewedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  applicant      User            @relation("JoinRequestApplicant", fields: [applicantId], references: [id], onDelete: Cascade)
+  reviewer       User?           @relation("JoinRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+}
+
+model CompanyApplication {
+  id         String                  @id @default(uuid())
+  userId     String
+  companyId  String
+  status     CompanyApplicationStatus @default(PENDING)
+  message    String
+  createdAt  DateTime                @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@index([companyId, status])
+}
+
+model DispatchJob {
+  id               String             @id @default(uuid())
+  type             DispatchJobType    @default(PERSONAL)
+  game             Game
+  cargo            String
+  originCity       String
+  destinationCity  String
+  sourceName       String?
+  destinationName  String?
+  payloadTons      Float
+  isWotr           Boolean           @default(false)
+  targetDistanceKm Float?
+  rewardCoins      Int?
+  notes            String?
+  visibility       JobVisibility     @default(OPEN)
+  status           DispatchJobStatus @default(OPEN)
+  plannedStartAt    DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  creatorId        String
+  companyId        String
+  assignedToId String?
+
+  creator          User               @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  company          Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignedTo       User?              @relation("JobAssignment", fields: [assignedToId], references: [id], onDelete: SetNull)
+  tripRecords      TripRecord[]
+
+  @@index([companyId, status, visibility])
+  @@index([creatorId, game, status])
+}
+
+model TripRecord {
+  id             String      @id @default(uuid())
+  userId         String
+  game           Game
+  cargo          String
+  startCity      String
+  destinationCity String
+  distanceKm     Float       @default(0)
+  maxSpeedKmh    Float       @default(0)
+  avgSpeedKmh    Float       @default(0)
+  fuelUsedL      Float       @default(0)
+  truckModel     String
+  damageDelta    Float       @default(0)
+  startTs        DateTime
+  endTs          DateTime?
+  mode           TripMode    @default(INVALID)
+  isValidForScore Boolean    @default(false)
+  scoreKmPoints  Float       @default(0)
+  routeCaptured   Boolean     @default(false)
+  isWotr         Boolean     @default(false)
+  isFlagged      Boolean     @default(false)
+  rejectReason   String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  sourceJobId    String?
+  driverProfileId String?
+
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceJob      DispatchJob? @relation(fields: [sourceJobId], references: [id], onDelete: SetNull)
+  routeTrack     RouteTrack?
+  points         TelemetryPoint[]
+  ingestionAudits TelemetryIngestionAudit[]
+
+  @@index([userId, startTs])
+  @@index([game, mode, isValidForScore])
+  @@index([isValidForScore, scoreKmPoints])
+}
+
+model UserStat {
+  id              String  @id @default(uuid())
+  userId          String  @unique
+  totalDistance   Float   @default(0)
+  totalDeliveries Int     @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RouteTrack {
+  id         String    @id @default(uuid())
+  tripRecordId String  @unique
+  gameVersion String?
+  isPremiumRequired Boolean @default(false)
+  isSampled   Boolean @default(false)
+  pathPoints  Json?
+  gpxData     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tripRecord  TripRecord @relation(fields: [tripRecordId], references: [id], onDelete: Cascade)
+}
+
+model TelemetryPoint {
+  id         String   @id @default(uuid())
+  tripRecordId String
+  ts         DateTime
+  latitude   Float
+  longitude  Float
+  speedKmh   Float
+  heading    Float?
+  blinker    String?
+  damage     Float?
+  fuelL      Float?
+
+  tripRecord TripRecord @relation(fields: [tripRecordId], references: [id], onDelete: Cascade)
+
+  @@index([tripRecordId, ts])
+}
+
+model LivePosition {
+  id            String   @id @default(uuid())
+  userId        String
+  companyId     String?
+  ts            DateTime @default(now())
+  latitude      Float
+  longitude     Float
+  speedKmh      Float
+  heading       Float?
+  blinker       String?
+  damage        Float?
+  inConvoy      Boolean  @default(false)
+  isActive      Boolean  @default(true)
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company       Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, isActive, ts])
+}
+
+model Convoy {
+  id             String      @id @default(uuid())
+  companyId      String
+  name           String
+  plannedRoute   String?
+  departureAt    DateTime
+  status         ConvoyStatus @default(PLANNED)
+  creatorId      String
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  company        Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator        User        @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  participants   ConvoyParticipant[]
+
+  @@index([companyId, departureAt, status])
+}
+
+model ConvoyParticipant {
+  id        String              @id @default(uuid())
+  convoyId  String
+  userId    String
+  role      ConvoyParticipantRole @default(DRIVER)
+  joinedAt  DateTime            @default(now())
+  vehicle   String?
+
+  convoy    Convoy              @relation(fields: [convoyId], references: [id], onDelete: Cascade)
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([convoyId, userId])
+  @@index([convoyId, role])
+}
+
+model Award {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  title       String
+  description String
+  criteria    Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userAwards  UserAward[]
+}
+
+model UserAward {
+  id        String   @id @default(uuid())
+  userId    String
+  awardId   String
+  achievedAt DateTime @default(now())
+
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  award     Award   @relation(fields: [awardId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, awardId])
+}
+
+model TelemetryIngestionAudit {
+  id            String   @id @default(uuid())
+  userId        String
+  tripRecordId  String?
+  clientVersion String?
+  payloadHash   String?
+  payload       Json?
+  validated     Boolean  @default(false)
+  rejectReason  String?
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tripRecord    TripRecord? @relation(fields: [tripRecordId], references: [id], onDelete: SetNull)
+}
+
+model LeaderboardSnapshot {
+  id              String            @id @default(uuid())
+  scope           AggregationScope
+  period          LeaderboardPeriod
+  game            Game
+  mode            TripMode
+  year            Int
+  month           Int?
+  companyId       String?
+  countryCode     String?
+  playerId        String?
+  totalKm         Float              @default(0)
+  totalTrips      Int                @default(0)
+  score           Float              @default(0)
+  generatedAt     DateTime           @default(now())
+
+  @@index([scope, period, game, mode, year, month])
+}
+
+model MonthlyRankHistory {
+  id            String           @id @default(uuid())
+  year          Int
+  month         Int
+  entityType    AggregationScope
+  companyId     String?
+  userId        String?
+  totalDistance Float            @default(0)
+  rank          Int
+  createdAt     DateTime         @default(now())
+
+  company       Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  user          User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([year, month, entityType])
+  @@index([companyId, year, month])
+  @@index([userId, year, month])
+  @@unique([year, month, entityType, companyId, userId])
+}

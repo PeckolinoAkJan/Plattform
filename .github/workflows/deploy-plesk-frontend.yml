@@ -1,0 +1,143 @@
+name: Deploy Frontend to Plesk
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - "frontend/public/**"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target-Umgebung (staging | production)"
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  build:
+    name: Frontend-Artifact bauen
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    outputs:
+      artifact_name: ${{ steps.pkg.outputs.artifact }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        run: pnpm run build
+
+      - name: Package frontend
+        id: pkg
+        run: |
+          mkdir -p ../.artifacts
+          tar -czf ../.artifacts/frontend-${{ github.sha }}.tgz \
+            --exclude=".git" \
+            --exclude="node_modules" \
+            --exclude=".env" \
+            -C .. frontend
+          echo "artifact=frontend-${{ github.sha }}.tgz" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-${{ github.sha }}
+          path: .artifacts/frontend-${{ github.sha }}.tgz
+          retention-days: 3
+
+  deploy:
+    name: Deploy auf Plesk
+    runs-on: ubuntu-latest
+    needs: build
+    env:
+      DEPLOY_ENV: ${{ github.event.inputs.environment || 'staging' }}
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-${{ github.sha }}
+          path: .artifacts
+
+      - name: Copy package to Plesk
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PLESK_HOST }}
+          port: ${{ secrets.PLESK_SSH_PORT || 22 }}
+          username: ${{ secrets.PLESK_USER }}
+          key: ${{ secrets.PLESK_SSH_KEY }}
+          source: .artifacts/frontend-${{ github.sha }}.tgz
+          target: /tmp/vtc-deploy
+
+      - name: Deploy on Plesk
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PLESK_HOST }}
+          port: ${{ secrets.PLESK_SSH_PORT || 22 }}
+          username: ${{ secrets.PLESK_USER }}
+          key: ${{ secrets.PLESK_SSH_KEY }}
+          script: |
+            set -euo pipefail
+
+            APP_DIR="${{ secrets.PLESK_FRONTEND_DIR }}"
+            SERVICE_NAME="${{ secrets.PLESK_FRONTEND_SERVICE_NAME || 'vtc-frontend' }}"
+            NODE_ENV="${{ secrets.PLESK_NODE_ENV || 'production' }}"
+            PORT="${{ secrets.PLESK_FRONTEND_PORT || '3001' }}"
+            RELEASE_FILE="/tmp/vtc-deploy/frontend-${{ github.sha }}.tgz"
+            RELEASE_DIR="/tmp/vtc-frontend-release"
+
+            if [ -z "${APP_DIR:-}" ]; then
+              echo "PLESK_FRONTEND_DIR is required (Pfad zur Server-Deployment-Kopie auf Plesk)."
+              exit 1
+            fi
+
+            mkdir -p "$APP_DIR"
+            rm -rf "$RELEASE_DIR"
+            mkdir -p "$RELEASE_DIR"
+            tar -xzf "$RELEASE_FILE" -C "$RELEASE_DIR"
+
+            RELEASE_PATH="$APP_DIR/releases/${{ github.sha }}"
+            mkdir -p "$APP_DIR/releases"
+            rm -rf "$RELEASE_PATH"
+            mv "$RELEASE_DIR"/frontend "$RELEASE_PATH"
+
+            cd "$RELEASE_PATH"
+            corepack pnpm install --frozen-lockfile
+            corepack pnpm run build
+            corepack pnpm prune --prod
+
+            ln -sfn "$RELEASE_PATH" "$APP_DIR/current-next"
+            mv -Tf "$APP_DIR/current-next" "$APP_DIR/current"
+
+            if command -v pm2 >/dev/null 2>&1; then
+              pm2 delete "$SERVICE_NAME" >/dev/null 2>&1 || true
+              cd "$APP_DIR/current"
+              PORT="$PORT" NODE_ENV="$NODE_ENV" \
+                pm2 start pnpm --name "$SERVICE_NAME" -- run start -- --port "$PORT"
+              pm2 save
+            else
+              echo "WARN: pm2 nicht gefunden. Bitte in Plesk die Prozessverwaltung konfigurieren (z. B. eigene startCommand im Node.js-Tooling)."
+              exit 1
+            fi
+
+            echo "Frontend deployed and started via pm2 as $SERVICE_NAME"
+            find "$APP_DIR/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -nr | tail -n +6 | cut -d' ' -f2- | xargs -r rm -rf

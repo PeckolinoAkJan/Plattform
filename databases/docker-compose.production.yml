@@ -1,0 +1,26 @@
+services:
+  postgres:
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+    volumes:
+      - vtc_postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+
+  redis:
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--requirepass", "${REDIS_PASSWORD}"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+    volumes:
+      - vtc_redis_data:/data
+
+volumes:
+  vtc_postgres_data:
+  vtc_redis_data:

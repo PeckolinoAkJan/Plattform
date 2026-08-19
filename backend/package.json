@@ -1,0 +1,61 @@
+{
+  "name": "vtc-platform-backend",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/src/main.js",
+    "build": "nest build",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "postinstall": "prisma generate",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate": "prisma migrate dev"
+    ,"prisma:seed": "ts-node prisma/seed.ts",
+    "prisma:import-legacy": "node prisma/import-legacy.mjs"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.2.1",
+    "@nestjs/config": "^4.0.4",
+    "@nestjs/core": "^11.2.1",
+    "@nestjs/jwt": "^11.0.2",
+    "@nestjs/passport": "^11.0.5",
+    "@nestjs/platform-express": "^11.2.1",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "@nestjs/platform-socket.io": "^11.2.1",
+    "@nestjs/swagger": "^11.4.7",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.4",
+    "bcryptjs": "^3.0.2",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "passport-google-oauth20": "^2.0.0",
+    "passport-oauth2": "^1.8.0",
+    "passport-steam": "^1.0.18",
+    "socket.io": "^4.8.1",
+    "ioredis": "^5.7.0",
+    "@prisma/client": "^5.16.1",
+    "@nestjs/websockets": "^11.2.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.24",
+    "@types/express": "^5.0.3",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^20.14.2",
+    "@types/passport-oauth2": "^1.8.0",
+    "prettier": "^3.3.3",
+    "prisma": "^5.16.1",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.5.4"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  }
+}

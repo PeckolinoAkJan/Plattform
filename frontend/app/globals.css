@@ -1,0 +1,531 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@layer utilities {
+  .landing-shell {
+    @apply relative mx-auto w-full max-w-[1320px] px-4 sm:px-6 xl:px-8;
+  }
+
+  .vtc-shell {
+    @apply relative mx-auto w-full max-w-[1320px] px-4 pb-16 sm:px-6 xl:px-8;
+  }
+
+  .vtc-panel {
+    @apply rounded-[1.6rem] border border-gold-700/45 bg-ink-900/65 p-4 sm:p-5 shadow-panel backdrop-blur;
+  }
+
+  .landing-section {
+    @apply relative overflow-hidden rounded-[1.75rem] border border-gold-800/45 bg-ink-900/60;
+  }
+
+  .landing-chip {
+    @apply inline-flex items-center gap-2 rounded-full border border-gold-600/45 bg-gold-900/30 px-3 py-1 text-xs font-medium uppercase tracking-[0.26em] text-gold-200/90;
+  }
+
+  .landing-title {
+    @apply text-[clamp(2rem,8vw,4.25rem)] font-semibold leading-tight tracking-tight text-white;
+  }
+
+  .landing-subtitle {
+    @apply mt-6 max-w-2xl text-sm leading-relaxed text-gold-100/85 sm:text-base;
+  }
+
+  .landing-card {
+    @apply rounded-2xl border border-gold-700/45 bg-ink-900/70 p-4 shadow-panel backdrop-blur-sm transition duration-300 hover:border-gold-500/55 hover:shadow-glowGold;
+  }
+
+  .landing-kpi-value {
+    @apply mt-2 text-[1.7rem] font-semibold leading-none text-white sm:text-[2rem];
+  }
+
+  .landing-soft-shadow {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 24px 48px -32px rgba(0, 0, 0, 0.85);
+  }
+
+  .vtc-brand-wordmark {
+    @apply min-w-0;
+  }
+
+  .scroll-reveal-delay-sm {
+    transition-delay: 90ms;
+  }
+
+  .scroll-reveal-delay-md {
+    transition-delay: 140ms;
+  }
+
+  .scroll-reveal-delay-lg {
+    transition-delay: 200ms;
+  }
+
+  .landing-gold-ink {
+    text-shadow: 0 0 10px rgba(237, 191, 61, 0.26);
+  }
+
+  .scroll-reveal-item {
+    opacity: 0;
+    transform: translateY(var(--sr-offset, 16px));
+    filter: blur(4px);
+    transition:
+      opacity 0.7s cubic-bezier(0.22, 0.61, 0.36, 1),
+      transform 0.7s cubic-bezier(0.22, 0.61, 0.36, 1),
+      filter 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
+    will-change: transform, opacity, filter;
+  }
+
+  .scroll-reveal-item.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+
+  .glass-panel {
+    @apply rounded-2xl border border-gold-700/45 bg-ink-950/70 shadow-glass backdrop-blur;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.8s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+
+  .animate-fade-up {
+    animation: fadeUp 0.85s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-gold-glow {
+    animation: goldPulse 2.5s ease-in-out infinite;
+  }
+
+  .animate-pop {
+    animation: popIn 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-enter-soft {
+    animation: fadeSlide 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .fade-reveal {
+    opacity: 0;
+    transform: translateY(14px);
+    filter: blur(2px);
+    transition: opacity 0.4s ease, transform 0.45s ease, filter 0.45s ease;
+  }
+
+  .animation-delay-sm {
+    animation-delay: 0.08s;
+  }
+
+  .animation-delay-md {
+    animation-delay: 0.18s;
+  }
+
+  .animation-delay-lg {
+    animation-delay: 0.28s;
+  }
+
+  .animation-delay-xl {
+    animation-delay: 0.42s;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes popIn {
+    from {
+      opacity: 0;
+      transform: scale(0.99);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.985) translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  @keyframes goldPulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.25);
+    }
+    50% {
+      box-shadow: 0 0 20px 2px rgba(212, 175, 55, 0.2);
+    }
+  }
+
+  @keyframes fadeSlide {
+    from {
+      opacity: 0;
+      transform: translateY(14px) scale(0.99);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes enterSoft {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 18px, 0) scale(0.985);
+      filter: blur(2px);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  .telemetry-gold-truck-marker {
+    filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.4));
+  }
+
+  .btn-micro-glide {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .btn-micro-glide::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transform: translateX(-110%);
+    background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.23), transparent);
+    transition: transform 0.35s ease, opacity 0.35s ease;
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .btn-micro-glide:hover::after,
+  .btn-micro-glide:focus-visible::after {
+    opacity: 1;
+    transform: translateX(110%);
+  }
+
+  .interactive-focus {
+    @apply transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-300/55 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950;
+  }
+
+  .vtc-shell-hero {
+    @apply mx-auto flex w-full max-w-[1320px] flex-col gap-10 px-4 pb-16 sm:px-6 xl:px-8;
+  }
+
+  .vtc-touch-target {
+    @apply min-h-11 min-w-11;
+  }
+
+  .telemetry-tooltip-text {
+    @apply text-xs;
+  }
+
+  .motion-enter-soft {
+    animation: enterSoft 0.72s cubic-bezier(0.18, 1, 0.3, 1) both;
+  }
+
+  .motion-enter-stagger-1 {
+    animation-delay: 80ms;
+  }
+
+  .motion-enter-stagger-2 {
+    animation-delay: 140ms;
+  }
+
+  .motion-enter-stagger-3 {
+    animation-delay: 220ms;
+  }
+
+  .live-marker-shell {
+    min-width: 168px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    background: linear-gradient(145deg, rgba(12, 12, 12, 0.95), rgba(30, 20, 2, 0.96));
+    color: #fff;
+    border: 1px solid rgba(212, 175, 55, 0.75);
+    box-shadow: 0 14px 22px rgba(0, 0, 0, 0.45);
+    font-size: 11px;
+    text-align: center;
+    font-family: Inter, Arial, sans-serif;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    transform: translateY(-10px);
+  }
+
+  .live-marker-title {
+    font-weight: 700;
+    color: #f6cc2b;
+    margin-bottom: 2px;
+  }
+
+  .live-marker-speed {
+    font-weight: 600;
+    color: #ffdf8d;
+  }
+
+  .live-marker-cargo {
+    margin-top: 2px;
+    color: #f4cf67;
+    font-size: 10px;
+  }
+
+  .telemetry-marker-root {
+    filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.45));
+  }
+
+  .telemetry-marker-shell {
+    min-width: 168px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    background: linear-gradient(145deg, rgba(12, 12, 12, 0.95), rgba(30, 20, 2, 0.96));
+    color: #fff;
+    border: 1px solid rgba(212, 175, 55, 0.75);
+    box-shadow: 0 14px 22px rgba(0, 0, 0, 0.45);
+    font-size: 11px;
+    text-align: center;
+    font-family: Inter, Arial, sans-serif;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    transform: translateY(-10px);
+  }
+
+  .telemetry-marker-shell--selected {
+    border-color: rgba(255, 218, 116, 0.95);
+    box-shadow:
+      0 16px 26px rgba(0, 0, 0, 0.45),
+      0 0 0 2px rgba(254, 205, 64, 0.2);
+    transform: translateY(-12px) scale(1.03);
+  }
+
+  .telemetry-marker-title {
+    font-weight: 700;
+    color: #f6cc2b;
+    margin-bottom: 2px;
+  }
+
+  .telemetry-marker-speed {
+    font-weight: 600;
+    color: #ffdf8d;
+  }
+
+  .telemetry-marker-cargo {
+    margin-top: 2px;
+    color: #f4cf67;
+    font-size: 10px;
+  }
+
+  .telemetry-cluster-root {
+    filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.45));
+  }
+
+  .telemetry-cluster-marker {
+    filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.42));
+  }
+
+  .telemetry-cluster-shell {
+    width: 62px;
+    height: 62px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(212, 175, 55, 0.82);
+    background: radial-gradient(circle at 30% 28%, rgba(56, 43, 4, 0.95), rgba(15, 11, 4, 0.96));
+    color: #ffdf8d;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    box-shadow: 0 14px 22px rgba(0, 0, 0, 0.45);
+  }
+
+  .telemetry-cluster-count {
+    font-size: 16px;
+    letter-spacing: 0.02em;
+  }
+
+  .telemetry-cluster-label {
+    margin-top: 2px;
+    font-size: 10px;
+    letter-spacing: 0.09em;
+    color: #ffe9a8;
+    opacity: 0.9;
+  }
+
+  .marker-cluster-small,
+  .marker-cluster-medium,
+  .marker-cluster-large {
+    background: transparent !important;
+  }
+
+  .marker-cluster-small div,
+  .marker-cluster-medium div,
+  .marker-cluster-large div {
+    color: #f7df9b;
+    background: linear-gradient(145deg, rgba(34, 21, 6, 0.98), rgba(70, 48, 9, 0.98));
+    border: 1px solid rgba(212, 175, 55, 0.84);
+    border-radius: 999px;
+    box-shadow: 0 12px 20px rgba(0, 0, 0, 0.5);
+    font-weight: 700;
+    font-size: 13px;
+    min-width: 44px;
+    min-height: 44px;
+    display: grid;
+    place-items: center;
+  }
+
+  .telemetry-cluster-shell {
+    min-width: 56px;
+    min-height: 56px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    line-height: 1;
+  }
+
+  .telemetry-trail-range {
+    width: 100%;
+    max-width: 100%;
+    appearance: none;
+    height: 8px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(79, 63, 11, 0.7), rgba(215, 168, 61, 0.76));
+    outline: none;
+  }
+
+  .telemetry-trail-range::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #f2d28f, #ffd75f);
+    border: 2px solid #22180c;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+  }
+
+  .telemetry-trail-range::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    border: 2px solid #22180c;
+    background: linear-gradient(180deg, #f2d28f, #ffd75f);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+  }
+
+  .telemetry-trail-range:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .telemetry-marker-tooltip .leaflet-tooltip-content {
+    margin: 0 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-fade-up,
+  .animate-scale-in,
+  .animate-pop,
+  .animate-gold-glow,
+  .animate-enter-soft {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .landing-shell {
+    @apply px-3;
+  }
+
+  .landing-title {
+    @apply text-[2.1rem];
+  }
+
+  .landing-kpi-value {
+    @apply text-[1.55rem];
+  }
+
+  .landing-subtitle {
+    @apply text-[0.96rem] leading-relaxed;
+  }
+
+  .landing-card {
+    @apply px-3 py-3;
+  }
+
+  .landing-section {
+    @apply rounded-[1.35rem];
+  }
+
+  .interactive-focus {
+    @apply focus-visible:ring-2 focus-visible:ring-gold-300/75;
+  }
+}
+
+@media (min-width: 1536px) {
+  .landing-shell {
+    @apply px-0;
+  }
+
+  .landing-title {
+    @apply text-6xl;
+  }
+}
+
+@layer base {
+  :where(a, button, input, textarea, [role='button']) {
+    outline-offset: 3px;
+  }
+}

@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>VtcDesktopClient</RootNamespace>
+    <AssemblyName>VtcDesktopClient</AssemblyName>
+    <Version>1.1.0</Version>
+    <FileVersion>1.1.0.0</FileVersion>
+    <InformationalVersion>1.1.0</InformationalVersion>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('Assets\\')">
+    <Content Include="Assets\\**\\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="SCSSdkClient">
+      <HintPath>ThirdParty\RenCloud-1.12.1\release_v_1_12_1\Demo\SCSSdkClient.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>ThirdParty\RenCloud-1.12.1\release_v_1_12_1\Demo\Newtonsoft.Json.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Content Include="ThirdParty\RenCloud-1.12.1\release_v_1_12_1\Win64\scs-telemetry.dll">
+      <Link>Plugin\scs-telemetry.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="clientsettings.json"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+  </ItemGroup>
+</Project>

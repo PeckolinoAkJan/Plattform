@@ -1,0 +1,5 @@
+{
+  "baseUrl": "http://localhost:3001",
+  "clientSecret": "",
+  "updateManifestUrl": "http://localhost:3001/client/updates/latest.json"
+}
