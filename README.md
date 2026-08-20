@@ -8,7 +8,7 @@ VTC Hub ist eine Plattform fuer ETS2/ATS-Speditionen mit NestJS-API, Next.js-Das
 - Frontend: Produktionsbuild erfolgreich; Landingpage, Login, Dashboard, Profil, Spedition, Fahrtenbuch und Socket.io/Leaflet-Livekarte vorhanden.
 - Desktop: Produktionsbuild erfolgreich; echtes SCS-SDK-Binding, Login, DPAPI-Session, sicherer HMAC-Client, Updater-Pruefsumme und sicherer Plugin-Installer vorhanden.
 - Daten: Prisma-Schema, initiale Produktionsmigration, Seed, PostgreSQL/Redis-Compose, Backup und Restore vorhanden.
-- Installer: portable Ausgabe und Setup-EXE fuer Version 1.1.3 werden im Tag-Workflow zusammen mit dem SHA-256-Update-Manifest gebaut.
+- Installer: portable Ausgabe und Setup-EXE fuer Version 1.1.4 werden im Tag-Workflow zusammen mit dem SHA-256-Update-Manifest gebaut.
 - Bestandsdaten: Der verifizierte Legacy-Export wurde importiert (7 Benutzer, 2 Speditionen, 5 Mitgliedschaften und 9 Social-Accounts). Der Import ist per Audit-ID idempotent.
 - Lokaler Betrieb: PostgreSQL und Redis laufen in Docker; Backend und Frontend wurden mit der aktuellen Konfiguration erfolgreich gebaut.
 

@@ -13,7 +13,7 @@ RequestExecutionLevel user
 
 !define ProductName "VTC Hub Desktop Client"
 !ifndef ProductVersion
-  !define ProductVersion "1.1.3"
+  !define ProductVersion "1.1.4"
 !endif
 !define ProductPublisher "VTC Hub"
 !define ProductExe "VtcDesktopClient.exe"
