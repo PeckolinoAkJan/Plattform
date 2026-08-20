@@ -122,6 +122,9 @@ public sealed class TelemetryManager : IDisposable
         var position = truck.CurrentValues.PositionValue;
         var maxDamage = new[] { damage.Engine, damage.Transmission, damage.Cabin, damage.Chassis, damage.WheelsAvg }.Max() * 100d;
 
+        var game = data.Game == SCSGame.Ats ? "ATS" : "ETS2";
+        var hasProjectedPosition = ScsCoordinateProjector.TryProject(game, position.Position.X, position.Position.Z, out var projected);
+
         return new TelemetryPayload
         {
             Cargo = data.JobValues.CargoValues.Name,
@@ -132,8 +135,11 @@ public sealed class TelemetryManager : IDisposable
             SpeedKmh = (int)Math.Round(Math.Abs(dashboard.Speed.Kph)),
             DriverName = Environment.UserName,
             UserStatus = data.JobValues.CargoLoaded ? "ON DUTY" : "READY",
-            // SCS X/Z values are game-world coordinates, not geographic WGS84 coordinates.
-            // Latitude/Longitude intentionally remain unset until a calibrated projection is available.
+            GameX = position.Position.X,
+            GameZ = position.Position.Z,
+            Latitude = hasProjectedPosition ? projected.Latitude : null,
+            Longitude = hasProjectedPosition ? projected.Longitude : null,
+            CoordinateAccuracy = hasProjectedPosition ? projected.Accuracy : null,
             Heading = NormalizeHeading(position.Orientation.Heading * 360d),
             DamagePct = maxDamage,
             DistanceKm = data.JobValues.PlannedDistanceKm,
@@ -149,7 +155,7 @@ public sealed class TelemetryManager : IDisposable
             CabinDamagePct = damage.Cabin * 100d,
             ChassisDamagePct = damage.Chassis * 100d,
             WheelsDamagePct = damage.WheelsAvg * 100d,
-            Game = data.Game == SCSGame.Ats ? "ATS" : "ETS2",
+            Game = game,
             TimestampUtc = DateTime.UtcNow,
         };
     }

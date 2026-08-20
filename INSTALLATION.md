@@ -105,7 +105,7 @@ Set-Location desktop\VtcDesktopClient
 .\Installer\build-installer.ps1 `
   -ApiBaseUrl "https://staging.vtc-truck-hub.de" `
   -UpdateManifestUrl "https://github.com/PeckolinoAkJan/Plattform/releases/latest/download/latest.json" `
-  -Version "1.1.2" `
+  -Version "1.1.3" `
   -BuildInnoInstaller
 ```
 

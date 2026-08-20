@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.IO;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
@@ -34,7 +35,7 @@ public sealed class TelemetryPluginInstaller
         string? pluginFolderHint = null)
     {
         _downloadUrl = string.IsNullOrWhiteSpace(downloadUrl)
-            ? "http://localhost:3001/downloads/vtchub-telemetry-plugin.zip"
+            ? string.Empty
             : downloadUrl.Trim();
 
         _httpClient = httpClient ?? new HttpClient();
@@ -54,14 +55,14 @@ public sealed class TelemetryPluginInstaller
         }
 
         var installedFolders = installFolders
-            .Where(folder => File.Exists(Path.Combine(folder, "VTC-Hub-Plugin.installed")))
+            .Where(folder => File.Exists(Path.Combine(folder, "scs-telemetry.dll")))
             .ToList();
         if (installedFolders.Count != installFolders.Count)
         {
             return new PluginInstallationState
             {
                 IsInstalled = false,
-                StatusMessage = $"Plugin fehlt in {installFolders.Count - installedFolders.Count} von {installFolders.Count} Spielinstallation(en).",
+                StatusMessage = $"SCS-Telemetrie fehlt in {installFolders.Count - installedFolders.Count} von {installFolders.Count} Spielinstallation(en).",
                 InstalledPath = string.Join("; ", installFolders),
             };
         }
@@ -69,7 +70,7 @@ public sealed class TelemetryPluginInstaller
         return new PluginInstallationState
         {
             IsInstalled = true,
-            StatusMessage = $"Plugin installiert in {installedFolders.Count} Spielinstallation(en).",
+            StatusMessage = $"SCS-Telemetrie ist in {installedFolders.Count} Spielinstallation(en) einsatzbereit.",
             InstalledPath = string.Join("; ", installedFolders),
         };
     }
@@ -97,15 +98,42 @@ public sealed class TelemetryPluginInstaller
                 {
                     Directory.CreateDirectory(destinationFolder);
                     var targetPlugin = Path.Combine(destinationFolder, "scs-telemetry.dll");
-                    File.Copy(bundledPlugin, targetPlugin, overwrite: true);
-                    await WriteMarkerAsync(destinationFolder, "bundled:RenCloud-1.12.1", cancellationToken).ConfigureAwait(false);
+                    if (!FilesMatch(bundledPlugin, targetPlugin))
+                    {
+                        File.Copy(bundledPlugin, targetPlugin, overwrite: true);
+                    }
+                    await TryWriteMarkerAsync(destinationFolder, "bundled:RenCloud-1.12.1", cancellationToken).ConfigureAwait(false);
                     installedPaths.Add(targetPlugin);
                 }
                 return new PluginInstallResult
                 {
                     Success = true,
-                    StatusMessage = $"Plugin in {installedPaths.Count} Spielinstallation(en) installiert.",
+                    StatusMessage = $"SCS-Telemetrie in {installedPaths.Count} Spielinstallation(en) geprüft und einsatzbereit. Spiel bitte neu starten.",
                     InstalledPath = string.Join("; ", installedPaths),
+                };
+            }
+
+            var existingPlugins = installFolders
+                .Select(folder => Path.Combine(folder, "scs-telemetry.dll"))
+                .Where(File.Exists)
+                .ToList();
+            if (existingPlugins.Count == installFolders.Count)
+            {
+                return new PluginInstallResult
+                {
+                    Success = true,
+                    StatusMessage = $"SCS-Telemetrie ist bereits in {existingPlugins.Count} Spielinstallation(en) einsatzbereit.",
+                    InstalledPath = string.Join("; ", existingPlugins),
+                };
+            }
+
+            if (string.IsNullOrWhiteSpace(_downloadUrl))
+            {
+                return new PluginInstallResult
+                {
+                    ManualActionRequired = true,
+                    Success = false,
+                    StatusMessage = "Plugin-Datei fehlt im Client-Paket. Bitte Client neu installieren oder aktualisieren.",
                 };
             }
 
@@ -169,7 +197,7 @@ public sealed class TelemetryPluginInstaller
                 File.Copy(tempFile, targetFile, overwrite: true);
             }
 
-            await WriteMarkerAsync(installFolder, _downloadUrl, cancellationToken).ConfigureAwait(false);
+            await TryWriteMarkerAsync(installFolder, _downloadUrl, cancellationToken).ConfigureAwait(false);
 
             return new PluginInstallResult
             {
@@ -181,23 +209,45 @@ public sealed class TelemetryPluginInstaller
         }
         catch (Exception ex)
         {
+            var message = ex is UnauthorizedAccessException
+                ? "Keine Schreibberechtigung im Steam-Spielordner. Client einmal als Administrator starten und erneut installieren."
+                : ex.Message;
             return new PluginInstallResult
             {
                 Success = false,
-                StatusMessage = $"Plugin-Installation fehlgeschlagen: {ex.Message}",
+                StatusMessage = $"Plugin-Installation fehlgeschlagen: {message}",
                 ManualActionRequired = true,
             };
         }
     }
 
-    private static Task WriteMarkerAsync(string installFolder, string source, CancellationToken cancellationToken)
+    private static async Task TryWriteMarkerAsync(string installFolder, string source, CancellationToken cancellationToken)
     {
         var markerPath = Path.Combine(installFolder, "VTC-Hub-Plugin.installed");
-        return File.WriteAllTextAsync(markerPath, JsonSerializer.Serialize(new
+        try
         {
-            InstalledAt = DateTime.UtcNow,
-            Source = source,
-        }), cancellationToken);
+            await File.WriteAllTextAsync(markerPath, JsonSerializer.Serialize(new
+            {
+                InstalledAt = DateTime.UtcNow,
+                Source = source,
+            }), cancellationToken).ConfigureAwait(false);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // The DLL itself is the source of truth. A marker must never turn a
+            // successful/verified installation into a false failure.
+        }
+    }
+
+    private static bool FilesMatch(string source, string target)
+    {
+        if (!File.Exists(target)) return false;
+        var sourceInfo = new FileInfo(source);
+        var targetInfo = new FileInfo(target);
+        if (sourceInfo.Length != targetInfo.Length) return false;
+        using var sourceStream = File.OpenRead(source);
+        using var targetStream = File.OpenRead(target);
+        return SHA256.HashData(sourceStream).AsSpan().SequenceEqual(SHA256.HashData(targetStream));
     }
 
     private static string? TryGetCurrentUserRegistryValue(string key, string valueName)
@@ -243,10 +293,11 @@ public sealed class TelemetryPluginInstaller
 
         var libraryRoots = steamRoots
             .Where(root => !string.IsNullOrWhiteSpace(root))
-            .Select(root => root!.Trim('"').TrimEnd('/', '\\'))
+            .Select(root => NormalizePath(root!))
             .Where(Directory.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .SelectMany(ReadSteamLibraryRoots)
+            .Select(NormalizePath)
             .Where(Directory.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -264,9 +315,12 @@ public sealed class TelemetryPluginInstaller
         }
 
         return candidateFolders
-            .Select(path => path.TrimEnd('/', '\\'))
+            .Select(NormalizePath)
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
+
+    private static string NormalizePath(string path) => Path.GetFullPath(
+        path.Trim('"').Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar));
 }

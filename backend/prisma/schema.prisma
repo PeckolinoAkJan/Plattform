@@ -121,6 +121,7 @@ model User {
   tripRecords       TripRecord[]
   telemetryBatches  TelemetryIngestionAudit[]
   livePositions     LivePosition[]
+  sentChatMessages CompanyChatMessage[]
   createdConvoys    Convoy[]
   convoyRoles       ConvoyParticipant[]
   awards            UserAward[]
@@ -195,6 +196,7 @@ model Company {
   jobs             DispatchJob[]
   convoys          Convoy[]
   companyLivePositions LivePosition[]
+  chatMessages      CompanyChatMessage[]
   monthlyRankHistory MonthlyRankHistory[]
 
   @@index([slug])
@@ -413,6 +415,20 @@ model LivePosition {
   company       Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@index([companyId, isActive, ts])
+}
+
+model CompanyChatMessage {
+  id           String   @id @default(uuid())
+  companyId    String
+  senderUserId String
+  body         String
+  createdAt    DateTime @default(now())
+
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sender       User     @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([senderUserId, createdAt])
 }
 
 model Convoy {

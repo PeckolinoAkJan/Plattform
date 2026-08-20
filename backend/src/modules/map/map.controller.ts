@@ -60,11 +60,11 @@ export class MapController {
       destinationCity: updateResult.destinationCity,
     };
 
-    const deliveredTo = this.mapGateway.emitTelemetryToRoom(updateResult.room, broadcastPayload);
+    const delivery = this.mapGateway.emitTelemetryToRoom(updateResult.room, broadcastPayload);
 
     return {
       ...updateResult,
-      deliveredTo,
+      deliveredTo: delivery.deliveredTo,
     };
   }
 }

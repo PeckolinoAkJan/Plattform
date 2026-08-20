@@ -92,6 +92,18 @@ export type UserProfile = {
 
 export type AuthProviders = Record<"google" | "discord" | "steam", boolean>;
 
+export type ChatMessage = {
+  id: string;
+  body: string;
+  createdAt: string;
+  sender: {
+    id: string;
+    displayName: string;
+    avatarUrl?: string | null;
+    companyRole?: string | null;
+  };
+};
+
 let hasRedirectedToLogin = false;
 
 function serializeAuthPath(pathname = "", search = "") {
@@ -223,6 +235,19 @@ export const setCurrentUserPassword = async (payload: {
   return response.data;
 };
 
+export const getChatMessages = async (limit = 100) => {
+  const response = await api.get<{ companyId: string; messages: ChatMessage[] }>(
+    "/api/chat/messages",
+    { params: { limit } },
+  );
+  return response.data;
+};
+
+export const sendChatMessage = async (body: string) => {
+  const response = await api.post<ChatMessage>("/api/chat/messages", { body });
+  return response.data;
+};
+
 export const logbookApi = {
   list: getLogbookEntries,
 };
@@ -230,4 +255,9 @@ export const logbookApi = {
 export const companyApi = {
   get: getCompanyProfile,
   update: updateCompanyProfile,
+};
+
+export const chatApi = {
+  list: getChatMessages,
+  send: sendChatMessage,
 };

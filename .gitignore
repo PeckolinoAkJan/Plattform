@@ -14,6 +14,7 @@ uploads/
 databases/backups/*.sql
 databases/backups/*.dump
 desktop/VtcDesktopClient/Installer/output/
+desktop/VtcDesktopClient/Installer/output-*/
 desktop/VtcDesktopClient/install/
 desktop/VtcDesktopClient/install_portable/
 desktop/VtcDesktopClient/install_singlefile/

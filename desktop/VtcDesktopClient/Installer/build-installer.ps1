@@ -2,7 +2,7 @@ param(
     [string]$ProjectPath = "$PSScriptRoot\\..\\VtcDesktopClient.csproj",
     [string]$Runtime = "win-x64",
     [string]$Configuration = "Release",
-    [string]$Version = "1.1.2",
+    [string]$Version = "1.1.3",
     [string]$OutputRoot = "$PSScriptRoot\\output",
     [string]$ApiBaseUrl = $env:VTC_API_URL,
     [string]$UpdateManifestUrl = $env:VTC_UPDATE_MANIFEST_URL,

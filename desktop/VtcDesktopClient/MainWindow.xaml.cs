@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls.Primitives;
@@ -81,12 +82,73 @@ public partial class MainWindow : Window
 
     private async void InstallPluginButton_Click(object sender, RoutedEventArgs e) => await _viewModel.InstallTelemetryPluginAsync();
 
+    private async void NavigationButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button button) return;
+        var section = button.Tag?.ToString() ?? "DASHBOARD";
+        _viewModel.SelectSection(section);
+        var showDashboard = string.Equals(section, "DASHBOARD", StringComparison.OrdinalIgnoreCase);
+        DashboardPanel.Visibility = showDashboard ? Visibility.Visible : Visibility.Collapsed;
+        SectionPanel.Visibility = showDashboard ? Visibility.Collapsed : Visibility.Visible;
+        var showMessages = string.Equals(section, "MESSAGES", StringComparison.OrdinalIgnoreCase);
+        SectionMetricsPanel.Visibility = showMessages ? Visibility.Collapsed : Visibility.Visible;
+        MessagesPanel.Visibility = showMessages ? Visibility.Visible : Visibility.Collapsed;
+
+        foreach (var nav in new[] { DashboardNavButton, JobsNavButton, VehiclesNavButton, DriversNavButton, ReportsNavButton, AlertsNavButton, MessagesNavButton, SettingsNavButton })
+        {
+            nav.Background = Brushes.Transparent;
+            nav.Foreground = new SolidColorBrush(Color.FromRgb(174, 178, 185));
+            nav.BorderThickness = new Thickness(0);
+        }
+        button.Background = new SolidColorBrush(Color.FromRgb(32, 27, 15));
+        button.Foreground = new SolidColorBrush(Color.FromRgb(242, 205, 103));
+        button.BorderBrush = new SolidColorBrush(Color.FromRgb(217, 169, 40));
+        button.BorderThickness = new Thickness(3, 0, 0, 0);
+
+        if (section is "ALERTS" or "SETTINGS")
+        {
+            await _viewModel.CheckForPluginStateAsync();
+            await _viewModel.RefreshConnectivityAsync();
+        }
+        if (showMessages) await _viewModel.RefreshChatAsync();
+    }
+
+    private async void RefreshChatButton_Click(object sender, RoutedEventArgs e) => await _viewModel.RefreshChatAsync();
+
+    private async void SendChatButton_Click(object sender, RoutedEventArgs e)
+    {
+        var message = ChatInput.Text;
+        if (await _viewModel.SendChatMessageAsync(message)) ChatInput.Clear();
+    }
+
+    private async void RefreshSectionButton_Click(object sender, RoutedEventArgs e)
+    {
+        await _viewModel.CheckForPluginStateAsync();
+        await _viewModel.RefreshConnectivityAsync();
+        _viewModel.SelectSection(_viewModel.SelectedSectionTitle);
+    }
+
+    private void OpenWebPortalButton_Click(object sender, RoutedEventArgs e)
+    {
+        var route = _viewModel.SelectedSectionTitle switch
+        {
+            "REPORTS" => "dashboard/logbook",
+            "JOBS" or "VEHICLES" or "DRIVERS" => "dashboard/company",
+            "SETTINGS" => "dashboard/profile",
+            "ALERTS" or "MESSAGES" => "dashboard",
+            _ => "dashboard",
+        };
+        var target = new Uri(new Uri(_api.BaseUrl), route);
+        Process.Start(new ProcessStartInfo(target.AbsoluteUri) { UseShellExecute = true });
+    }
+
     private async void SessionButton_Click(object sender, RoutedEventArgs e)
     {
         if (!string.IsNullOrWhiteSpace(_api.JwtToken))
         {
             _api.JwtToken = string.Empty;
             ClientSessionStore.Clear();
+            _viewModel.SetSignedOut();
             ApplySession(null);
             return;
         }
@@ -125,6 +187,7 @@ public partial class MainWindow : Window
                 bitmap.UriSource = new Uri(path, UriKind.Absolute);
                 bitmap.CacheOption = BitmapCacheOption.OnLoad;
                 bitmap.EndInit();
+                if (bitmap.PixelWidth > 1024 || bitmap.PixelHeight > 512) continue;
                 bitmap.Freeze();
                 LogoImage.Source = bitmap;
                 LogoImage.Visibility = Visibility.Visible;

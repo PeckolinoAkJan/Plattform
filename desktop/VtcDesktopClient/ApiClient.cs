@@ -132,6 +132,32 @@ public sealed class ApiClient
                ?? new Dictionary<string, bool>();
     }
 
+    public async Task<bool> CheckHealthAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var response = await _httpClient.GetAsync("/api/health", cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) return false;
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var root = document.RootElement;
+            var status = root.TryGetProperty("status", out var statusNode) ? statusNode.GetString() : null;
+            var database = root.TryGetProperty("database", out var databaseNode) ? databaseNode.GetString() : null;
+            var redis = root.TryGetProperty("redis", out var redisNode) ? redisNode.GetString() : null;
+            return string.Equals(status, "ok", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(database, "up", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(redis, "up", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (HttpRequestException)
+        {
+            return false;
+        }
+    }
+
     public async Task<ApiUserProfile?> GetCurrentUserAsync(CancellationToken cancellationToken = default)
     {
         var token = JwtToken?.Trim();
@@ -152,6 +178,28 @@ public sealed class ApiClient
     public async Task SendLiveLocationAsync(LocationData payload, CancellationToken cancellationToken = default)
     {
         var response = await SendAsync("/api/map/update-telemetry", payload, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<IReadOnlyList<ChatMessageItem>> GetChatMessagesAsync(
+        int limit = 100,
+        CancellationToken cancellationToken = default)
+    {
+        var token = JwtToken?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(token)) throw new InvalidOperationException("Anmeldung erforderlich.");
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/chat/messages?limit={Math.Clamp(limit, 1, 200)}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        var result = await JsonSerializer.DeserializeAsync<ChatMessagesResponse>(stream, ApiJson.Default, cancellationToken).ConfigureAwait(false);
+        return result?.Messages ?? [];
+    }
+
+    public async Task SendChatMessageAsync(string body, CancellationToken cancellationToken = default)
+    {
+        using var response = await SendAsync("/api/chat/messages", new { body = body.Trim() }, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
     }
 
@@ -247,3 +295,24 @@ public sealed class ApiClient
 }
 
 public sealed record ApiUserProfile(string DisplayName);
+
+public sealed class ChatMessagesResponse
+{
+    public List<ChatMessageItem> Messages { get; init; } = [];
+}
+
+public sealed class ChatMessageItem
+{
+    public string Id { get; init; } = string.Empty;
+    public string Body { get; init; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; init; }
+    public ChatMessageSender Sender { get; init; } = new();
+}
+
+public sealed class ChatMessageSender
+{
+    public string Id { get; init; } = string.Empty;
+    public string DisplayName { get; init; } = "Unbekannter Fahrer";
+    public string? AvatarUrl { get; init; }
+    public string? CompanyRole { get; init; }
+}

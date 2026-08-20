@@ -45,6 +45,22 @@ type LiveMapProps = {
   simulationDriverCount?: number | null;
 };
 
+type LivePositionsResponse = {
+  totalCount?: number;
+  points?: Array<{
+    id?: string;
+    userId?: string;
+    companyId?: string | null;
+    latitude?: number;
+    longitude?: number;
+    speed?: number;
+    speedKmh?: number;
+    heading?: number | null;
+    timestamp?: string;
+    driver?: { name?: string };
+  }>;
+};
+
 const MapContainer = dynamic(() => import('react-leaflet').then((mod) => mod.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then((mod) => mod.TileLayer), { ssr: false });
 const Polyline = dynamic(() => import('react-leaflet').then((mod) => mod.Polyline), { ssr: false });
@@ -385,7 +401,6 @@ const LIVE_MAP_DENSITY_CALIBRATION = [
 function getStatusMeta(status: LiveMapStatus): LiveMapStatusMeta {
   return SOCKET_STATUS_META[status];
 }
-
 function formatTime(time: number | null): string {
   return time ? new Date(time).toLocaleTimeString('de-DE') : '—';
 }
@@ -1029,6 +1044,45 @@ export default function LiveMap({ companyId, simulationDriverCount }: LiveMapPro
     simulationTimerRef.current = window.setInterval(tick, LIVE_MAP_SIMULATION_TICK_MS);
     return () => stopSimulation();
   }, [isSimulationMode, normalizedSimulationDriverCount, stopSimulation, setStatusSafe, appendTrailPoint]);
+
+  useEffect(() => {
+    if (isSimulationMode) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const loadPersistedPositions = async () => {
+      try {
+        const url = new URL('/api/map/live-positions', SOCKET_URL);
+        url.searchParams.set('maxAgeMinutes', '60');
+        if (telemetryContext.companyId) url.searchParams.set('companyId', telemetryContext.companyId);
+        const response = await fetch(url, { credentials: 'include', signal: controller.signal });
+        if (!response.ok) return;
+        const snapshot = (await response.json()) as LivePositionsResponse;
+        for (const point of snapshot.points ?? []) {
+          const normalized = parseTelemetryPayload({
+            driverId: point.userId ?? point.id,
+            driverName: point.driver?.name,
+            companyId: point.companyId,
+            latitude: point.latitude,
+            longitude: point.longitude,
+            speedKmh: point.speedKmh ?? point.speed,
+            heading: point.heading,
+            timestamp: point.timestamp,
+          });
+          if (normalized) ingestTelemetry(normalized, Date.now());
+        }
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          setStatusSafe('reconnecting', 'Gespeicherte Positionen werden erneut geladen');
+        }
+      }
+    };
+
+    void loadPersistedPositions();
+    return () => controller.abort();
+  }, [isSimulationMode, telemetryContext.companyId, ingestTelemetry, setStatusSafe]);
+
   useEffect(() => {
     if (isSimulationMode) {
       return;
@@ -1062,8 +1116,6 @@ export default function LiveMap({ companyId, simulationDriverCount }: LiveMapPro
     const onConnect = () => {
       markConnected();
       emitJoinRoom(socket, selector);
-      setLastStreamAt(null);
-      lastStreamAtRef.current = null;
       enforceStatusAfterConnect();
     };
 

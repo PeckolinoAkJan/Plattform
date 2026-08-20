@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 
 namespace VtcDesktopClient;
 
@@ -25,6 +26,12 @@ public sealed class TelemetryPayload
     public double? Longitude { get; set; }
 
     public double? Heading { get; set; }
+
+    public double? GameX { get; set; }
+
+    public double? GameZ { get; set; }
+
+    public string? CoordinateAccuracy { get; set; }
 
     public double DamagePct { get; set; }
 
@@ -64,6 +71,7 @@ public sealed class LocationData
 
     public string? CompanyId { get; set; }
 
+    [JsonIgnore]
     public string? Room { get; set; }
 
     public string? CargoName { get; set; }
@@ -72,6 +80,7 @@ public sealed class LocationData
 
     public string? DestinationCity { get; set; }
 
+    [JsonPropertyName("timestamp")]
     public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
 }
 
