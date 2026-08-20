@@ -3,9 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="VTC Hub Desktop Client" Width="1672" Height="941"
         MinWidth="1280" MinHeight="760" WindowStartupLocation="CenterScreen"
-        WindowStyle="None" AllowsTransparency="True" ResizeMode="CanResizeWithGrip"
-        Background="Transparent" FontFamily="Bahnschrift" Foreground="#F4F0E6"
-        UseLayoutRounding="True" SnapsToDevicePixels="True">
+        WindowStyle="None" AllowsTransparency="False" ResizeMode="CanResizeWithGrip"
+        Background="#090C0F" FontFamily="Bahnschrift" Foreground="#F4F0E6"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        PreviewMouseLeftButtonDown="Window_PreviewMouseLeftButtonDown">
     <Window.Resources>
         <SolidColorBrush x:Key="Gold" Color="#D9A928"/>
         <SolidColorBrush x:Key="GoldSoft" Color="#F2CD67"/>
@@ -156,7 +157,7 @@
             <!-- MAIN -->
             <Grid Grid.Column="1" Margin="28,14,20,14">
                 <Grid.RowDefinitions><RowDefinition Height="65"/><RowDefinition Height="*"/><RowDefinition Height="48"/></Grid.RowDefinitions>
-                <Grid Grid.Row="0" MouseLeftButtonDown="HeaderDragArea_MouseLeftButtonDown">
+                <Grid Grid.Row="0">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Border Background="#1D190E" BorderBrush="#6B5520" BorderThickness="1" CornerRadius="18" Padding="16,8">
@@ -174,6 +175,7 @@
                         <TextBlock Text="☁  22°C" FontSize="14" Foreground="#E8E4DA" VerticalAlignment="Center" Margin="0,0,14,0"/>
                         <Button x:Name="CheckForUpdateButton" Style="{StaticResource GoldButton}" Content="{Binding UpdateActionLabel}" IsEnabled="{Binding IsUpdateActionEnabled}" Click="UpdateButton_Click" Margin="0,0,12,0"/>
                         <Button Style="{StaticResource WindowButton}" Content="—" Click="MinimizeButton_Click" Margin="0,0,8,0"/>
+                        <Button x:Name="MaximizeButton" Style="{StaticResource WindowButton}" Content="□" Click="MaximizeButton_Click" Margin="0,0,8,0"/>
                         <Button Style="{StaticResource WindowButton}" Content="×" Click="CloseButton_Click"/>
                     </StackPanel>
                 </Grid>

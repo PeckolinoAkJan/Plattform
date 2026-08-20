@@ -98,6 +98,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool IsUpdatePending => _isUpdatePending;
     public string UpdateActionLabel => _isUpdatePending ? "INSTALL UPDATE" : "CHECK UPDATE";
 
+    public void SetAuthenticatedUser(string? displayName) => Ui(() =>
+    {
+        UserName = Text(displayName, Environment.UserName);
+        UserAvatar = UserName[..1].ToUpperInvariant();
+        UserStatus = "SIGNED IN";
+    });
+
     public async Task InitializeAsync()
     {
         await CheckForPluginStateAsync().ConfigureAwait(false);

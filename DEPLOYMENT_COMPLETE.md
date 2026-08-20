@@ -1,6 +1,6 @@
 # VTC Hub - Release- und Deploymentstatus
 
-Stand: 19.08.2026
+Stand: 20.08.2026
 
 ## Lokal technisch abgeschlossen
 
@@ -23,7 +23,7 @@ Stand: 19.08.2026
 - [x] Updater mit HTTPS-Regel und SHA-256-Pruefung
 - [x] ZIP-Slip-Schutz und gebuendeltes Telemetrie-Plugin
 - [x] portable Windows-EXE und NSIS-Setup-EXE gebaut
-- [x] Version 1.1.1, Setup-EXE, portable ZIP und SHA-256-Manifest im Tag-Workflow konsistent
+- [x] Version 1.1.2, Setup-EXE, portable ZIP und SHA-256-Manifest im Tag-Workflow konsistent
 - [x] Prisma-Initialmigration und Seed vorhanden
 - [x] PostgreSQL-/Redis-Compose, Backup und Restore vorhanden
 - [x] atomare Plesk-Releases, persistente Uploads und Rollback vorbereitet
@@ -35,6 +35,11 @@ Stand: 19.08.2026
 - [x] Google-, Discord- und Steam-Flows fuer Web und Desktop verdrahtet
 - [x] Desktop-OAuth mit Loopback, PKCE, State und Redis-Einmalcode abgesichert
 - [x] Loginoberflaechen deaktivieren nicht konfigurierte Provider automatisch
+- [x] Bestehende OAuth-Benutzer beim Legacy-Import verlustfrei zugeordnet
+- [x] Desktop-Fenster fuer monitoruebergreifendes Ziehen repariert
+- [x] Telemetrie-Installer fuer alle Steam-Bibliotheken und beide Spiele repariert
+- [x] obere Dashboardnavigation und Speditionsreiter umgesetzt
+- [x] explizite OAuth-Kontoverknuepfung und normaler Passwort-Login im Profil umgesetzt
 
 ## Nachgewiesene Buildbefehle
 
@@ -42,25 +47,25 @@ Stand: 19.08.2026
 - Frontend: `pnpm run build`
 - Desktop: `dotnet publish` ueber `Installer/build-installer.ps1`
 
-Alle drei Builds wurden am 19.08.2026 mit dem korrigierten 1.1.1-Quellstand erneut erfolgreich ausgefuehrt. Der aktuelle Setup-Build liegt unter `desktop/VtcDesktopClient/Installer/output/installer/VtcDesktopClient-Setup.exe`.
+Backend, Frontend und Desktop wurden am 20.08.2026 mit dem 1.1.2-Quellstand erneut erfolgreich gebaut. Der Tag-Workflow erzeugt den aktuellen Setup-Build reproduzierbar.
 
 ## Externe Freigaben vor Produktion
 
 Diese Punkte sind keine fehlenden Codemodule, sondern brauchen Betreiberkonten oder reale Infrastruktur:
 
-- [ ] DNS, TLS-Zertifikate und Plesk-Zielpfade setzen
-- [ ] starke Produktions-Secrets eintragen
-- [ ] Google-, Discord- und Steam-Anwendungen registrieren und Callback-URLs freigeben
-- [ ] Produktionsdatenbank starten, Migration anwenden und Restoreprobe dokumentieren
-- [ ] Version 1.1.1 committen, pushen und als Tag/Release veroeffentlichen
+- [x] DNS, TLS-Zertifikate und Plesk-Zielpfade gesetzt
+- [x] starke Staging-Secrets eingetragen
+- [x] Google- und Discord-Anwendungen registriert und Callback-URLs freigegeben
+- [x] PostgreSQL und Redis gestartet, Migrationen angewendet und Import-Backup erzeugt
+- [x] Version 1.1.2 committen, pushen und als Tag/Release veroeffentlichen
 - [ ] das vom Tag-Workflow erzeugte Update-Manifest ueber die echte HTTPS-Releaseadresse pruefen
 - [ ] SCS-Spielweltkoordinaten mit einem kalibrierten Kartendienst nach WGS84 projizieren, bevor sie als echte Leaflet-GPS-Positionen genutzt werden
 - [ ] End-to-End-Abnahme mit laufendem ETS2/ATS, produktiver API und mehreren Livefahrern durchfuehren
 
 ## Ehrliche Einsatzgrenze
 
-Der Quellcode und die lokale Laufzeitumgebung sind startklar. Google-, Discord- und Steam-Login koennen jedoch erst gegen die echten Anbieter getestet werden, nachdem der Betreiber dort Anwendungen registriert und die realen IDs/Secrets eingetragen hat. Der alte Website-Ordner enthielt Benutzeridentitaeten, aber keine verwendbaren Provider-Secrets.
+Der Quellcode und die Staging-Laufzeit sind startklar. Google und Discord sind konfiguriert; Steam kann erst nach Bereitstellung eines echten Steam-API-Schluessels aktiviert werden.
 
-Plesk wurde in diesem Abschlusslauf nicht veraendert. Ein produktives Deployment setzt ausdrueckliche Serverfreigabe, Zielpfade, SSH-Zugang, DNS/TLS und eine abschliessende Restore- sowie End-to-End-Abnahme voraus.
+Plesk, PostgreSQL und Redis wurden fuer Staging eingerichtet. Eine spaetere Produktionsfreigabe benoetigt weiterhin Code-Signing, Steam-Schluessel und die Abnahme mit laufendem ETS2/ATS.
 
 Gruene lokale Builds bedeuten nicht automatisch, dass externe Plesk-, OAuth- oder Steamkonten bereits konfiguriert sind.

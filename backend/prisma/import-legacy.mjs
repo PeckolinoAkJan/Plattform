@@ -101,26 +101,38 @@ async function main() {
   const profilesByUser = new Map(profiles.map((profile) => [profile.user_id, profile]));
   const authByUser = new Map(authUsers.map((user) => [user.id, user]));
   const steamAssignments = buildSteamAssignments(profiles, vtcs, members);
+  let reusedExistingUsers = 0;
+  let alreadyImported = false;
 
   await prisma.$transaction(async (tx) => {
     const previous = await tx.legacyImportAudit.findUnique({ where: { exportId: manifest.exportId } });
     if (previous) {
       if (previous.manifestSha256 !== manifestSha256) throw new Error("Export ID already imported with a different manifest");
+      alreadyImported = true;
       console.log(`Legacy export ${manifest.exportId} is already imported.`);
       return;
     }
 
+    const userIdMap = new Map();
     for (const authUser of authUsers) {
       const profile = profilesByUser.get(authUser.id);
       if (!profile) throw new Error(`Missing profile for user ${authUser.id}`);
       const email = normalizeEmail(authUser.email);
-      const conflictingEmail = email ? await tx.user.findFirst({ where: { email, NOT: { id: authUser.id } } }) : null;
-      if (conflictingEmail) throw new Error(`Email conflict for ${email}`);
+      const [existingByLegacyId, existingByEmail] = await Promise.all([
+        tx.user.findUnique({ where: { id: authUser.id } }),
+        email ? tx.user.findUnique({ where: { email } }) : null,
+      ]);
+      if (existingByLegacyId && existingByEmail && existingByLegacyId.id !== existingByEmail.id) {
+        throw new Error(`Legacy ID and email resolve to different users for ${email}`);
+      }
+      const canonicalUserId = existingByLegacyId?.id || existingByEmail?.id || authUser.id;
+      userIdMap.set(authUser.id, canonicalUserId);
+      if (canonicalUserId !== authUser.id) reusedExistingUsers += 1;
 
       await tx.user.upsert({
-        where: { id: authUser.id },
+        where: { id: canonicalUserId },
         create: {
-          id: authUser.id,
+          id: canonicalUserId,
           email,
           steamId: steamAssignments.get(authUser.id) || `legacy:${authUser.id}`,
           displayName: profile.display_name || email || authUser.id,
@@ -144,6 +156,8 @@ async function main() {
 
     for (const vtc of vtcs) {
       if (!authByUser.has(vtc.created_by)) throw new Error(`Missing company owner ${vtc.created_by}`);
+      const ownerId = userIdMap.get(vtc.created_by);
+      if (!ownerId) throw new Error(`Missing mapped company owner ${vtc.created_by}`);
       await tx.company.upsert({
         where: { id: vtc.id },
         create: {
@@ -152,7 +166,7 @@ async function main() {
           tag: vtc.tag,
           description: vtc.description,
           slug: vtc.slug,
-          ownerId: vtc.created_by,
+          ownerId,
           logoUrl: vtc.logo_url,
           isActive: true,
           createdAt: toDate(vtc.created_at),
@@ -163,7 +177,7 @@ async function main() {
           tag: vtc.tag,
           description: vtc.description,
           slug: vtc.slug,
-          ownerId: vtc.created_by,
+          ownerId,
           logoUrl: vtc.logo_url,
           isActive: true,
           updatedAt: toDate(vtc.updated_at),
@@ -174,10 +188,12 @@ async function main() {
     for (const member of members) {
       const role = membershipRole(member.role);
       const joinedAt = toDate(member.joined_at);
+      const userId = userIdMap.get(member.user_id);
+      if (!userId) throw new Error(`Missing mapped member ${member.user_id}`);
       await tx.companyMembership.upsert({
-        where: { userId_companyId: { userId: member.user_id, companyId: member.vtc_id } },
+        where: { userId_companyId: { userId, companyId: member.vtc_id } },
         create: {
-          userId: member.user_id,
+          userId,
           companyId: member.vtc_id,
           companyRole: role,
           membershipStatus: "ACTIVE",
@@ -187,15 +203,17 @@ async function main() {
         update: { companyRole: role, membershipStatus: "ACTIVE", joinedAt },
       });
       await tx.user.update({
-        where: { id: member.user_id },
+        where: { id: userId },
         data: { companyId: member.vtc_id, companyRole: role, globalRoles: [globalRole(member.role)] },
       });
     }
 
     const socialAccounts = [];
     for (const identity of authIdentities.filter((item) => item.provider !== "email")) {
+      const userId = userIdMap.get(identity.user_id);
+      if (!userId) throw new Error(`Missing mapped identity user ${identity.user_id}`);
       socialAccounts.push({
-        userId: identity.user_id,
+        userId,
         provider: identity.provider,
         providerUserId: identity.provider_id,
         providerEmail: normalizeEmail(identity.email || identity.identity_data?.email),
@@ -204,8 +222,10 @@ async function main() {
       });
     }
     for (const profile of profiles) {
-      if (profile.discord_id) socialAccounts.push({ userId: profile.user_id, provider: "discord", providerUserId: profile.discord_id, providerEmail: null, avatarUrl: null, createdAt: toDate(profile.created_at) });
-      if (profile.steam_id && steamAssignments.get(profile.user_id) === profile.steam_id) socialAccounts.push({ userId: profile.user_id, provider: "steam", providerUserId: profile.steam_id, providerEmail: null, avatarUrl: profile.avatar_url, createdAt: toDate(profile.created_at) });
+      const userId = userIdMap.get(profile.user_id);
+      if (!userId) throw new Error(`Missing mapped profile user ${profile.user_id}`);
+      if (profile.discord_id) socialAccounts.push({ userId, provider: "discord", providerUserId: profile.discord_id, providerEmail: null, avatarUrl: null, createdAt: toDate(profile.created_at) });
+      if (profile.steam_id && steamAssignments.get(profile.user_id) === profile.steam_id) socialAccounts.push({ userId, provider: "steam", providerUserId: profile.steam_id, providerEmail: null, avatarUrl: profile.avatar_url, createdAt: toDate(profile.created_at) });
     }
 
     for (const account of socialAccounts) {
@@ -228,7 +248,9 @@ async function main() {
     });
   }, { timeout: 30_000 });
 
-  console.log(`Imported ${authUsers.length} users, ${vtcs.length} companies and ${members.length} memberships.`);
+  if (!alreadyImported) {
+    console.log(`Imported ${authUsers.length} users, ${vtcs.length} companies and ${members.length} memberships; reused ${reusedExistingUsers} existing user.`);
+  }
 }
 
 main().catch((error) => {

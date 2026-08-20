@@ -132,6 +132,23 @@ public sealed class ApiClient
                ?? new Dictionary<string, bool>();
     }
 
+    public async Task<ApiUserProfile?> GetCurrentUserAsync(CancellationToken cancellationToken = default)
+    {
+        var token = JwtToken?.Trim();
+        if (string.IsNullOrWhiteSpace(token)) return null;
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/users/me");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode) return null;
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var displayName = document.RootElement.TryGetProperty("displayName", out var displayNameNode)
+            ? displayNameNode.GetString()
+            : null;
+        if (string.IsNullOrWhiteSpace(displayName)) return null;
+        return new ApiUserProfile(displayName);
+    }
+
     public async Task SendLiveLocationAsync(LocationData payload, CancellationToken cancellationToken = default)
     {
         var response = await SendAsync("/api/map/update-telemetry", payload, cancellationToken).ConfigureAwait(false);
@@ -228,3 +245,5 @@ public sealed class ApiClient
         };
     }
 }
+
+public sealed record ApiUserProfile(string DisplayName);

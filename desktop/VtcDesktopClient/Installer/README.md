@@ -17,7 +17,7 @@ Produktionsnaher Build:
 
 ```powershell
 .\Installer\build-installer.ps1 `
-  -Version 1.1.1 `
+  -Version 1.1.2 `
   -ApiBaseUrl "https://staging.vtc-truck-hub.de" `
   -UpdateManifestUrl "https://github.com/PeckolinoAkJan/Plattform/releases/latest/download/latest.json" `
   -BuildInnoInstaller

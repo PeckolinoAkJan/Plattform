@@ -1,5 +1,15 @@
-import { BadRequestException, Injectable, InternalServerErrorException, UnauthorizedException } from "@nestjs/common";
-import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  UnauthorizedException,
+} from "@nestjs/common";
+import {
+  createHash,
+  randomBytes,
+  scryptSync,
+  timingSafeEqual,
+} from "node:crypto";
 import { compare as compareBcrypt } from "bcryptjs";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
@@ -19,14 +29,17 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
   ) {
-    const developmentLoginEnabled = this.configService.get<string>("NODE_ENV") !== "production";
+    const developmentLoginEnabled =
+      this.configService.get<string>("NODE_ENV") !== "production";
     this.localLoginPassword = developmentLoginEnabled
       ? this.configService.get<string>("LOCAL_LOGIN_PASSWORD")?.trim()
       : undefined;
     this.localLoginPasswordHash = developmentLoginEnabled
       ? this.configService.get<string>("LOCAL_LOGIN_PASSWORD_HASH")?.trim()
       : undefined;
-    this.localLoginPasswordSalt = this.configService.get<string>("LOCAL_LOGIN_PASSWORD_SALT")?.trim();
+    this.localLoginPasswordSalt = this.configService
+      .get<string>("LOCAL_LOGIN_PASSWORD_SALT")
+      ?.trim();
   }
 
   sanitizeReturnTo(value: unknown): string {
@@ -63,15 +76,24 @@ export class AuthService {
 
     const userPasswordHash = user.passwordHash;
     if (typeof userPasswordHash === "string" && userPasswordHash.length > 0) {
-      if (userPasswordHash.startsWith("$2") && await compareBcrypt(password, userPasswordHash)) {
+      if (
+        userPasswordHash.startsWith("$2") &&
+        (await compareBcrypt(password, userPasswordHash))
+      ) {
         return {
           token: this.generateToken(user),
           user,
         };
       }
 
-      const expectedHash = this.hashPassword(password, this.localLoginPasswordSalt);
-      if (expectedHash && this.compareStringConstantTime(expectedHash, userPasswordHash)) {
+      const expectedHash = this.hashPassword(
+        password,
+        this.localLoginPasswordSalt,
+      );
+      if (
+        expectedHash &&
+        this.compareStringConstantTime(expectedHash, userPasswordHash)
+      ) {
         return {
           token: this.generateToken(user),
           user,
@@ -79,7 +101,10 @@ export class AuthService {
       }
     }
 
-    if (this.localLoginPassword && this.compareStringConstantTime(password, this.localLoginPassword)) {
+    if (
+      this.localLoginPassword &&
+      this.compareStringConstantTime(password, this.localLoginPassword)
+    ) {
       return {
         token: this.generateToken(user),
         user,
@@ -87,8 +112,17 @@ export class AuthService {
     }
 
     if (this.localLoginPasswordHash) {
-      const expectedHash = this.hashPassword(password, this.localLoginPasswordSalt);
-      if (expectedHash && this.compareStringConstantTime(expectedHash, this.localLoginPasswordHash)) {
+      const expectedHash = this.hashPassword(
+        password,
+        this.localLoginPasswordSalt,
+      );
+      if (
+        expectedHash &&
+        this.compareStringConstantTime(
+          expectedHash,
+          this.localLoginPasswordHash,
+        )
+      ) {
         return {
           token: this.generateToken(user),
           user,
@@ -106,7 +140,12 @@ export class AuthService {
 
     const externalId = profile.externalId.trim();
     const existingAccount = await this.prisma.socialAccount.findUnique({
-      where: { provider_providerUserId: { provider: profile.provider, providerUserId: externalId } },
+      where: {
+        provider_providerUserId: {
+          provider: profile.provider,
+          providerUserId: externalId,
+        },
+      },
       include: { user: true },
     });
 
@@ -132,7 +171,9 @@ export class AuthService {
 
       if (byEmail) {
         if (!profile.emailVerified) {
-          throw new BadRequestException("Der Anbieter hat diese E-Mail nicht verifiziert. Bitte verknüpfe den Anbieter im Profil.");
+          throw new BadRequestException(
+            "Der Anbieter hat diese E-Mail nicht verifiziert. Bitte verknüpfe den Anbieter im Profil.",
+          );
         }
         return this.linkSocialAccount(byEmail, profile);
       }
@@ -142,7 +183,10 @@ export class AuthService {
       const user = await tx.user.create({
         data: {
           email: profile.emailVerified ? normalizedEmail : null,
-          steamId: profile.provider === "steam" ? externalId : `${profile.provider}:${externalId}`,
+          steamId:
+            profile.provider === "steam"
+              ? externalId
+              : `${profile.provider}:${externalId}`,
           displayName: this.getDisplayName(profile),
           avatarUrl: profile.avatarUrl,
           globalRoles: [GlobalRole.LONER],
@@ -162,7 +206,10 @@ export class AuthService {
     });
   }
 
-  createOAuthFlow(provider: AuthProvider, query: Record<string, unknown>): OAuthFlowStart {
+  createOAuthFlow(
+    provider: AuthProvider,
+    query: Record<string, unknown>,
+  ): OAuthFlowStart {
     const mode = query.client === "desktop" ? "desktop" : "web";
     const csrf = randomBytes(24).toString("base64url");
     const flow: OAuthFlowPayload = {
@@ -179,8 +226,32 @@ export class AuthService {
       flow.clientState = this.validateClientState(query.state);
     }
 
+    return this.signOAuthFlow(flow);
+  }
+
+  createOAuthLinkFlow(
+    provider: AuthProvider,
+    query: Record<string, unknown>,
+    userId: string,
+  ): OAuthFlowStart {
+    if (!userId)
+      throw new UnauthorizedException(
+        "Anmeldung fuer die Kontoverknuepfung fehlt.",
+      );
+    const flow: OAuthFlowPayload = {
+      kind: "oauth-flow",
+      provider,
+      mode: "link",
+      csrf: randomBytes(24).toString("base64url"),
+      returnTo: this.sanitizeReturnTo(query.returnTo || "/dashboard/profile"),
+      linkUserId: userId,
+    };
+    return this.signOAuthFlow(flow);
+  }
+
+  private signOAuthFlow(flow: OAuthFlowPayload): OAuthFlowStart {
     return {
-      csrf,
+      csrf: flow.csrf,
       token: this.jwtService.sign(flow, {
         secret: this.jwtSecret(),
         expiresIn: "10m",
@@ -189,8 +260,13 @@ export class AuthService {
     };
   }
 
-  verifyOAuthFlow(token: string | undefined, provider: AuthProvider, returnedState?: string): OAuthFlowPayload {
-    if (!token) throw new UnauthorizedException("OAuth-Flow fehlt oder ist abgelaufen.");
+  verifyOAuthFlow(
+    token: string | undefined,
+    provider: AuthProvider,
+    returnedState?: string,
+  ): OAuthFlowPayload {
+    if (!token)
+      throw new UnauthorizedException("OAuth-Flow fehlt oder ist abgelaufen.");
     let flow: OAuthFlowPayload;
     try {
       flow = this.jwtService.verify<OAuthFlowPayload>(token, {
@@ -198,38 +274,152 @@ export class AuthService {
         audience: "vtc-oauth-flow",
       });
     } catch {
-      throw new UnauthorizedException("OAuth-Flow ist ungueltig oder abgelaufen.");
+      throw new UnauthorizedException(
+        "OAuth-Flow ist ungueltig oder abgelaufen.",
+      );
     }
-    if (flow.kind !== "oauth-flow" || flow.provider !== provider) throw new UnauthorizedException("OAuth-Provider stimmt nicht ueberein.");
-    if (provider !== "steam" && (!returnedState || !this.compareStringConstantTime(returnedState, flow.csrf))) {
+    if (flow.kind !== "oauth-flow" || flow.provider !== provider)
+      throw new UnauthorizedException("OAuth-Provider stimmt nicht ueberein.");
+    if (flow.mode === "link" && !flow.linkUserId)
+      throw new UnauthorizedException("Kontoverknuepfung ist unvollstaendig.");
+    if (
+      provider !== "steam" &&
+      (!returnedState ||
+        !this.compareStringConstantTime(returnedState, flow.csrf))
+    ) {
       throw new UnauthorizedException("OAuth-State ist ungueltig.");
     }
     return flow;
   }
 
-  async createDesktopLoginRedirect(flow: OAuthFlowPayload, user: User): Promise<string> {
-    if (flow.mode !== "desktop" || !flow.callback || !flow.challenge || !flow.clientState) {
+  async linkOAuthProfile(
+    userId: string,
+    profile: SocialAuthProfile,
+  ): Promise<User> {
+    const externalId = profile.externalId?.trim();
+    if (!externalId)
+      throw new BadRequestException("OAuth-Profile fehlt eine externe ID.");
+
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (!user)
+        throw new UnauthorizedException(
+          "Der angemeldete Benutzer wurde nicht gefunden.",
+        );
+
+      const existingAccount = await tx.socialAccount.findUnique({
+        where: {
+          provider_providerUserId: {
+            provider: profile.provider,
+            providerUserId: externalId,
+          },
+        },
+      });
+      if (existingAccount?.userId === userId) return user;
+      if (existingAccount)
+        throw new BadRequestException(
+          "Dieses Anbieter-Konto ist bereits mit einem anderen VTC-Hub-Konto verknuepft.",
+        );
+
+      const existingProvider = await tx.socialAccount.findFirst({
+        where: { userId, provider: profile.provider },
+      });
+      if (existingProvider)
+        throw new BadRequestException(
+          `Mit ${profile.provider} ist bereits ein anderes Konto verknuepft.`,
+        );
+
+      if (profile.provider === "steam") {
+        const steamOwner = await tx.user.findUnique({
+          where: { steamId: externalId },
+        });
+        if (steamOwner && steamOwner.id !== userId) {
+          throw new BadRequestException(
+            "Dieses Steam-Konto ist bereits einem anderen VTC-Hub-Konto zugeordnet.",
+          );
+        }
+      }
+
+      await tx.socialAccount.create({
+        data: {
+          userId,
+          provider: profile.provider,
+          providerUserId: externalId,
+          providerEmail: this.normalizeEmail(profile.email),
+          avatarUrl: profile.avatarUrl,
+        },
+      });
+
+      return tx.user.update({
+        where: { id: userId },
+        data: {
+          steamId: profile.provider === "steam" ? externalId : undefined,
+          avatarUrl: user.avatarUrl || profile.avatarUrl || undefined,
+        },
+      });
+    });
+  }
+
+  async createDesktopLoginRedirect(
+    flow: OAuthFlowPayload,
+    user: User,
+  ): Promise<string> {
+    if (
+      flow.mode !== "desktop" ||
+      !flow.callback ||
+      !flow.challenge ||
+      !flow.clientState
+    ) {
       throw new BadRequestException("Desktop-OAuth-Flow ist unvollstaendig.");
     }
     const code = randomBytes(32).toString("base64url");
     const key = `oauth-code:${sha256(code)}`;
-    const stored = await this.redis.storeOneTime(key, JSON.stringify({ token: this.generateToken(user), challenge: flow.challenge }), 120);
-    if (!stored) throw new InternalServerErrorException("OAuth-Code konnte nicht gespeichert werden.");
+    const stored = await this.redis.storeOneTime(
+      key,
+      JSON.stringify({
+        token: this.generateToken(user),
+        challenge: flow.challenge,
+      }),
+      120,
+    );
+    if (!stored)
+      throw new InternalServerErrorException(
+        "OAuth-Code konnte nicht gespeichert werden.",
+      );
     const callback = new URL(flow.callback);
     callback.searchParams.set("code", code);
     callback.searchParams.set("state", flow.clientState);
     return callback.toString();
   }
 
-  async exchangeDesktopCode(code: unknown, verifier: unknown): Promise<{ token: string }> {
-    if (typeof code !== "string" || typeof verifier !== "string" || code.length < 32 || verifier.length < 43) {
-      throw new BadRequestException("OAuth-Code oder PKCE-Verifier ist ungueltig.");
+  async exchangeDesktopCode(
+    code: unknown,
+    verifier: unknown,
+  ): Promise<{ token: string }> {
+    if (
+      typeof code !== "string" ||
+      typeof verifier !== "string" ||
+      code.length < 32 ||
+      verifier.length < 43
+    ) {
+      throw new BadRequestException(
+        "OAuth-Code oder PKCE-Verifier ist ungueltig.",
+      );
     }
     const raw = await this.redis.takeOneTime(`oauth-code:${sha256(code)}`);
-    if (!raw) throw new UnauthorizedException("OAuth-Code ist ungueltig oder wurde bereits verwendet.");
+    if (!raw)
+      throw new UnauthorizedException(
+        "OAuth-Code ist ungueltig oder wurde bereits verwendet.",
+      );
     const payload = JSON.parse(raw) as { token?: string; challenge?: string };
-    const actualChallenge = createHash("sha256").update(verifier).digest("base64url");
-    if (!payload.challenge || !this.compareStringConstantTime(actualChallenge, payload.challenge) || !payload.token) {
+    const actualChallenge = createHash("sha256")
+      .update(verifier)
+      .digest("base64url");
+    if (
+      !payload.challenge ||
+      !this.compareStringConstantTime(actualChallenge, payload.challenge) ||
+      !payload.token
+    ) {
       throw new UnauthorizedException("PKCE-Pruefung fehlgeschlagen.");
     }
     return { token: payload.token };
@@ -295,7 +485,10 @@ export class AuthService {
     return `${profile.provider}-${profile.externalId}`;
   }
 
-  private async linkSocialAccount(user: User, profile: SocialAuthProfile): Promise<User> {
+  private async linkSocialAccount(
+    user: User,
+    profile: SocialAuthProfile,
+  ): Promise<User> {
     const externalId = profile.externalId.trim();
     const email = this.normalizeEmail(profile.email);
     return this.prisma.$transaction(async (tx) => {
@@ -320,33 +513,51 @@ export class AuthService {
   }
 
   private validateDesktopCallback(value: unknown): string {
-    if (typeof value !== "string") throw new BadRequestException("Desktop-Callback fehlt.");
+    if (typeof value !== "string")
+      throw new BadRequestException("Desktop-Callback fehlt.");
     let callback: URL;
-    try { callback = new URL(value); } catch { throw new BadRequestException("Desktop-Callback ist ungueltig."); }
-    if (callback.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(callback.hostname) || !callback.port || callback.username || callback.password || callback.hash) {
-      throw new BadRequestException("Desktop-Callback muss eine lokale HTTP-Adresse mit Port sein.");
+    try {
+      callback = new URL(value);
+    } catch {
+      throw new BadRequestException("Desktop-Callback ist ungueltig.");
+    }
+    if (
+      callback.protocol !== "http:" ||
+      !["127.0.0.1", "localhost"].includes(callback.hostname) ||
+      !callback.port ||
+      callback.username ||
+      callback.password ||
+      callback.hash
+    ) {
+      throw new BadRequestException(
+        "Desktop-Callback muss eine lokale HTTP-Adresse mit Port sein.",
+      );
     }
     return callback.toString();
   }
 
   private validatePkceChallenge(value: unknown): string {
-    if (typeof value !== "string" || !/^[A-Za-z0-9_-]{43,128}$/.test(value)) throw new BadRequestException("PKCE-Challenge ist ungueltig.");
+    if (typeof value !== "string" || !/^[A-Za-z0-9_-]{43,128}$/.test(value))
+      throw new BadRequestException("PKCE-Challenge ist ungueltig.");
     return value;
   }
 
   private validateClientState(value: unknown): string {
-    if (typeof value !== "string" || !/^[A-Za-z0-9_-]{16,128}$/.test(value)) throw new BadRequestException("Desktop-State ist ungueltig.");
+    if (typeof value !== "string" || !/^[A-Za-z0-9_-]{16,128}$/.test(value))
+      throw new BadRequestException("Desktop-State ist ungueltig.");
     return value;
   }
 
   private jwtSecret(): string {
     const secret = this.configService.get<string>("JWT_SECRET");
-    if (!secret) throw new InternalServerErrorException("JWT_SECRET ist nicht gesetzt.");
+    if (!secret)
+      throw new InternalServerErrorException("JWT_SECRET ist nicht gesetzt.");
     return secret;
   }
 }
 
-const sha256 = (value: string): string => createHash("sha256").update(value).digest("hex");
+const sha256 = (value: string): string =>
+  createHash("sha256").update(value).digest("hex");
 
 export type AuthProvider = "google" | "discord" | "steam";
 
@@ -368,12 +579,13 @@ export interface OAuthFlowStart {
 export interface OAuthFlowPayload {
   kind: "oauth-flow";
   provider: AuthProvider;
-  mode: "web" | "desktop";
+  mode: "web" | "desktop" | "link";
   csrf: string;
   returnTo: string;
   callback?: string;
   challenge?: string;
   clientState?: string;
+  linkUserId?: string;
 }
 
 interface LocalLoginInput {

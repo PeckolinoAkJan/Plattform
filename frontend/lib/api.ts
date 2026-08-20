@@ -1,14 +1,14 @@
-import axios, { AxiosError, type AxiosResponse } from 'axios';
-import { removeStoredAuthToken } from './auth-client';
+import axios, { AxiosError, type AxiosResponse } from "axios";
+import { removeStoredAuthToken } from "./auth-client";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 12000,
   withCredentials: true,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 });
 
@@ -54,6 +54,11 @@ export type Company = {
   description?: string | null;
   logoUrl?: string | null;
   avatarUrl?: string | null;
+  members?: Array<{
+    id: string;
+    displayName: string;
+    companyRole: string | null;
+  }>;
 };
 
 export type UserProfile = {
@@ -66,6 +71,7 @@ export type UserProfile = {
   companyId: string | null;
   companyRole: string | null;
   profileVisibility: string;
+  passwordConfigured?: boolean;
   createdAt: string;
   updatedAt: string;
   stats?: {
@@ -78,38 +84,47 @@ export type UserProfile = {
     tag: string | null;
     logoUrl: string | null;
   } | null;
+  connectedAccounts?: Array<{
+    provider: string;
+    connectedAt: string;
+  }>;
 };
+
+export type AuthProviders = Record<"google" | "discord" | "steam", boolean>;
 
 let hasRedirectedToLogin = false;
 
-function serializeAuthPath(pathname = '', search = '') {
+function serializeAuthPath(pathname = "", search = "") {
   const returnTo = `${pathname}${search}`;
-  if (!returnTo.startsWith('/')) {
-    return '/dashboard';
+  if (!returnTo.startsWith("/")) {
+    return "/dashboard";
   }
 
-  if (returnTo.startsWith('//') || returnTo.startsWith('/api/')) {
-    return '/dashboard';
+  if (returnTo.startsWith("//") || returnTo.startsWith("/api/")) {
+    return "/dashboard";
   }
 
   return returnTo;
 }
 
 function emitAuthExpired() {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return;
   }
 
   try {
     removeStoredAuthToken();
-    window.dispatchEvent(new Event('vtc:auth-expired'));
+    window.dispatchEvent(new Event("vtc:auth-expired"));
   } catch {
     // noop
   }
 
-  if (window.location.pathname !== '/login' && !hasRedirectedToLogin) {
+  if (window.location.pathname !== "/login" && !hasRedirectedToLogin) {
     hasRedirectedToLogin = true;
-    const returnTo = serializeAuthPath(window.location.pathname, window.location.search);
+    const returnTo = serializeAuthPath(
+      window.location.pathname,
+      window.location.search,
+    );
     window.location.replace(`/login?returnTo=${encodeURIComponent(returnTo)}`);
   }
 }
@@ -126,44 +141,85 @@ api.interceptors.response.use(
 );
 
 const logApiInteraction = (entry: ApiLogEntry) => {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return;
   }
 
   try {
-    window.dispatchEvent(new CustomEvent('vtc:api-log', { detail: entry }));
+    window.dispatchEvent(new CustomEvent("vtc:api-log", { detail: entry }));
   } catch {
     // no-op
   }
 };
 
 export const getLogbookEntries = async () => {
-  const response = await api.get<LogbookEntry[]>('/api/logbook');
-  logApiInteraction({ status: response.status, method: 'GET', url: '/api/logbook' });
+  const response = await api.get<LogbookEntry[]>("/api/logbook");
+  logApiInteraction({
+    status: response.status,
+    method: "GET",
+    url: "/api/logbook",
+  });
   return response.data;
 };
 
 export const getCompanyProfile = async () => {
-  const response = await api.get<Company>('/api/company');
-  logApiInteraction({ status: response.status, method: 'GET', url: '/api/company' });
+  const response = await api.get<Company>("/api/company");
+  logApiInteraction({
+    status: response.status,
+    method: "GET",
+    url: "/api/company",
+  });
   return response.data;
 };
 
 export const updateCompanyProfile = async (payload: Partial<Company>) => {
-  const response = await api.patch<Company>('/api/company', payload);
-  logApiInteraction({ status: response.status, method: 'PATCH', url: '/api/company' });
+  const response = await api.patch<Company>("/api/company", payload);
+  logApiInteraction({
+    status: response.status,
+    method: "PATCH",
+    url: "/api/company",
+  });
   return response.data;
 };
 
 export const getCurrentUser = async () => {
-  const response = await api.get<UserProfile>('/api/users/me');
-  logApiInteraction({ status: response.status, method: 'GET', url: '/api/users/me' });
+  const response = await api.get<UserProfile>("/api/users/me");
+  logApiInteraction({
+    status: response.status,
+    method: "GET",
+    url: "/api/users/me",
+  });
   return response.data;
 };
 
 export const updateCurrentUser = async (payload: Partial<UserProfile>) => {
-  const response = await api.patch<UserProfile>('/api/users/me', payload);
-  logApiInteraction({ status: response.status, method: 'PATCH', url: '/api/users/me' });
+  const response = await api.patch<UserProfile>("/api/users/me", payload);
+  logApiInteraction({
+    status: response.status,
+    method: "PATCH",
+    url: "/api/users/me",
+  });
+  return response.data;
+};
+
+export const getAuthProviders = async () => {
+  const response = await api.get<AuthProviders>("/api/auth/providers");
+  return response.data;
+};
+
+export const getProviderLinkUrl = (provider: keyof AuthProviders) => {
+  const baseUrl = `${API_BASE_URL}`.replace(/\/$/, "");
+  return `${baseUrl}/api/auth/${provider}/link?returnTo=${encodeURIComponent("/dashboard/profile")}`;
+};
+
+export const setCurrentUserPassword = async (payload: {
+  currentPassword?: string;
+  newPassword: string;
+}) => {
+  const response = await api.patch<{ passwordConfigured: true }>(
+    "/api/users/me/password",
+    payload,
+  );
   return response.data;
 };
 

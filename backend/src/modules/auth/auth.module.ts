@@ -2,7 +2,15 @@ import { Global, Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
-import { AuthController, DiscordLoginGuard, GoogleLoginGuard, SteamLoginGuard } from "./auth.controller";
+import {
+  AuthController,
+  DiscordLinkGuard,
+  DiscordLoginGuard,
+  GoogleLinkGuard,
+  GoogleLoginGuard,
+  SteamLinkGuard,
+  SteamLoginGuard,
+} from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { JwtStrategy } from "./strategies/jwt.strategy";
@@ -35,6 +43,9 @@ import { SteamStrategy } from "./strategies/steam.strategy";
     GoogleLoginGuard,
     DiscordLoginGuard,
     SteamLoginGuard,
+    GoogleLinkGuard,
+    DiscordLinkGuard,
+    SteamLinkGuard,
   ],
   exports: [AuthService, JwtAuthGuard, JwtModule],
 })

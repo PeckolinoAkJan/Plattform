@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PassportStrategy } from "@nestjs/passport";
 import { Strategy as OAuth2Strategy } from "passport-oauth2";
-import { AuthService, SocialAuthProfile } from "../auth.service";
+import { SocialAuthProfile } from "../auth.service";
 
 type DiscordProfile = {
   id: string;
@@ -14,7 +14,10 @@ type DiscordProfile = {
 };
 
 class DiscordOAuth2Strategy extends OAuth2Strategy {
-  override userProfile(accessToken: string, done: (error: Error | null, profile?: DiscordProfile) => void): void {
+  override userProfile(
+    accessToken: string,
+    done: (error: Error | null, profile?: DiscordProfile) => void,
+  ): void {
     void fetch("https://discord.com/api/users/@me", {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -22,22 +25,33 @@ class DiscordOAuth2Strategy extends OAuth2Strategy {
       },
     })
       .then(async (response) => {
-        if (!response.ok) throw new Error(`Discord profile request failed with ${response.status}`);
+        if (!response.ok)
+          throw new Error(
+            `Discord profile request failed with ${response.status}`,
+          );
         return response.json() as Promise<DiscordProfile>;
       })
       .then((profile) => done(null, profile))
-      .catch((error: unknown) => done(error instanceof Error ? error : new Error("Discord profile request failed")));
+      .catch((error: unknown) =>
+        done(
+          error instanceof Error
+            ? error
+            : new Error("Discord profile request failed"),
+        ),
+      );
   }
 }
 
 @Injectable()
-export class DiscordStrategy extends PassportStrategy(DiscordOAuth2Strategy, "discord") {
-  constructor(
-    private readonly authService: AuthService,
-    configService: ConfigService,
-  ) {
-    const clientId = configService.get<string>("DISCORD_CLIENT_ID") || "oauth-disabled";
-    const clientSecret = configService.get<string>("DISCORD_CLIENT_SECRET") || "oauth-disabled";
+export class DiscordStrategy extends PassportStrategy(
+  DiscordOAuth2Strategy,
+  "discord",
+) {
+  constructor(configService: ConfigService) {
+    const clientId =
+      configService.get<string>("DISCORD_CLIENT_ID") || "oauth-disabled";
+    const clientSecret =
+      configService.get<string>("DISCORD_CLIENT_SECRET") || "oauth-disabled";
 
     const callbackUrl =
       configService.get<string>("DISCORD_CALLBACK_URL") ??
@@ -52,7 +66,11 @@ export class DiscordStrategy extends PassportStrategy(DiscordOAuth2Strategy, "di
     });
   }
 
-  async validate(_accessToken: string, _refreshToken: string, profile: DiscordProfile): Promise<any> {
+  validate(
+    _accessToken: string,
+    _refreshToken: string,
+    profile: DiscordProfile,
+  ): SocialAuthProfile {
     const userProfile: SocialAuthProfile = {
       id: profile.id,
       provider: "discord",
@@ -63,7 +81,7 @@ export class DiscordStrategy extends PassportStrategy(DiscordOAuth2Strategy, "di
       avatarUrl: this.resolveAvatar(profile),
     };
 
-    return this.authService.handleOAuthProfile(userProfile);
+    return userProfile;
   }
 
   private resolveAvatar(profile: DiscordProfile): string | null {

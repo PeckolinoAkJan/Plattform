@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
 namespace VtcDesktopClient;
@@ -42,8 +43,8 @@ public sealed class TelemetryPluginInstaller
 
     public PluginInstallationState GetCurrentState()
     {
-        var installFolder = ResolvePluginFolder();
-        if (string.IsNullOrWhiteSpace(installFolder))
+        var installFolders = ResolvePluginFolders();
+        if (installFolders.Count == 0)
         {
             return new PluginInstallationState
             {
@@ -52,54 +53,64 @@ public sealed class TelemetryPluginInstaller
             };
         }
 
-        var marker = Path.Combine(installFolder, "VTC-Hub-Plugin.installed");
-        if (!File.Exists(marker))
+        var installedFolders = installFolders
+            .Where(folder => File.Exists(Path.Combine(folder, "VTC-Hub-Plugin.installed")))
+            .ToList();
+        if (installedFolders.Count != installFolders.Count)
         {
             return new PluginInstallationState
             {
                 IsInstalled = false,
-                StatusMessage = $"Plugin nicht gefunden in: {installFolder}",
-                InstalledPath = installFolder,
+                StatusMessage = $"Plugin fehlt in {installFolders.Count - installedFolders.Count} von {installFolders.Count} Spielinstallation(en).",
+                InstalledPath = string.Join("; ", installFolders),
             };
         }
 
         return new PluginInstallationState
         {
             IsInstalled = true,
-            StatusMessage = $"Plugin installiert in: {installFolder}",
-            InstalledPath = installFolder,
+            StatusMessage = $"Plugin installiert in {installedFolders.Count} Spielinstallation(en).",
+            InstalledPath = string.Join("; ", installedFolders),
         };
     }
 
     public async Task<PluginInstallResult> InstallAsync(CancellationToken cancellationToken = default)
     {
-        var installFolder = ResolvePluginFolder();
-        if (string.IsNullOrWhiteSpace(installFolder))
+        var installFolders = ResolvePluginFolders();
+        if (installFolders.Count == 0)
         {
             return new PluginInstallResult
             {
                 ManualActionRequired = true,
                 Success = false,
-                StatusMessage = "Plugin-Pfad nicht gefunden. Bitte Game-Ordner manuell im Dialog auswählen.",
+                StatusMessage = "Keine ETS2-/ATS-Steam-Installation gefunden.",
             };
         }
 
         try
         {
-            Directory.CreateDirectory(installFolder);
             var bundledPlugin = Path.Combine(AppContext.BaseDirectory, "Plugin", "scs-telemetry.dll");
             if (File.Exists(bundledPlugin))
             {
-                var targetPlugin = Path.Combine(installFolder, "scs-telemetry.dll");
-                File.Copy(bundledPlugin, targetPlugin, overwrite: true);
-                await WriteMarkerAsync(installFolder, "bundled:RenCloud-1.12.1", cancellationToken).ConfigureAwait(false);
+                var installedPaths = new List<string>();
+                foreach (var destinationFolder in installFolders)
+                {
+                    Directory.CreateDirectory(destinationFolder);
+                    var targetPlugin = Path.Combine(destinationFolder, "scs-telemetry.dll");
+                    File.Copy(bundledPlugin, targetPlugin, overwrite: true);
+                    await WriteMarkerAsync(destinationFolder, "bundled:RenCloud-1.12.1", cancellationToken).ConfigureAwait(false);
+                    installedPaths.Add(targetPlugin);
+                }
                 return new PluginInstallResult
                 {
                     Success = true,
-                    StatusMessage = $"Plugin installed: {targetPlugin}",
-                    InstalledPath = installFolder,
+                    StatusMessage = $"Plugin in {installedPaths.Count} Spielinstallation(en) installiert.",
+                    InstalledPath = string.Join("; ", installedPaths),
                 };
             }
+
+            var installFolder = installFolders[0];
+            Directory.CreateDirectory(installFolder);
             var tempFile = Path.Combine(
                 Path.GetTempPath(),
                 $"vtc-hub-telemetry-plugin-{DateTime.UtcNow:yyyyMMddHHmmss}.tmp");
@@ -189,48 +200,73 @@ public sealed class TelemetryPluginInstaller
         }), cancellationToken);
     }
 
-    private static string? TryGetValueFromRegistry(string key, string valueName)
+    private static string? TryGetCurrentUserRegistryValue(string key, string valueName)
     {
         using var regKey = Registry.CurrentUser.OpenSubKey(key);
         return regKey?.GetValue(valueName)?.ToString();
     }
 
-    private string? ResolvePluginFolder()
+    private static string? TryGetLocalMachineRegistryValue(string key, string valueName, RegistryView view)
     {
+        using var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view);
+        using var regKey = baseKey.OpenSubKey(key);
+        return regKey?.GetValue(valueName)?.ToString();
+    }
+
+    private static IEnumerable<string> ReadSteamLibraryRoots(string steamRoot)
+    {
+        yield return steamRoot;
+        var libraryFile = Path.Combine(steamRoot, "steamapps", "libraryfolders.vdf");
+        if (!File.Exists(libraryFile))
+        {
+            yield break;
+        }
+
+        foreach (var line in File.ReadLines(libraryFile))
+        {
+            var match = Regex.Match(line, "\\\"path\\\"\\s+\\\"(?<path>.+)\\\"", RegexOptions.IgnoreCase);
+            if (!match.Success) continue;
+            yield return match.Groups["path"].Value.Replace(@"\\", @"\").Trim();
+        }
+    }
+
+    private static IReadOnlyList<string> ResolvePluginFolders()
+    {
+        var steamRoots = new[]
+        {
+            TryGetCurrentUserRegistryValue(@"Software\Valve\Steam", "SteamPath"),
+            TryGetLocalMachineRegistryValue(@"SOFTWARE\Valve\Steam", "InstallPath", RegistryView.Registry64),
+            TryGetLocalMachineRegistryValue(@"SOFTWARE\Valve\Steam", "InstallPath", RegistryView.Registry32),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Steam"),
+        };
+
+        var libraryRoots = steamRoots
+            .Where(root => !string.IsNullOrWhiteSpace(root))
+            .Select(root => root!.Trim('"').TrimEnd('/', '\\'))
+            .Where(Directory.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .SelectMany(ReadSteamLibraryRoots)
+            .Where(Directory.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         var candidateFolders = new List<string>();
-
-        var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        if (!string.IsNullOrWhiteSpace(documents))
+        foreach (var libraryRoot in libraryRoots)
         {
+            var common = Path.Combine(libraryRoot, "steamapps", "common");
+            foreach (var game in new[] { "Euro Truck Simulator 2", "American Truck Simulator" })
+            {
+                var gameRoot = Path.Combine(common, game);
+                if (!Directory.Exists(gameRoot)) continue;
+                candidateFolders.Add(Path.Combine(gameRoot, "bin", "win_x64", "plugins"));
+            }
         }
 
-        var steamPath = TryGetValueFromRegistry(@"Software\Valve\Steam", "SteamPath");
-        if (!string.IsNullOrWhiteSpace(steamPath))
-        {
-            var common = Path.Combine(steamPath.Trim('"'), "steamapps", "common");
-            candidateFolders.Add(Path.Combine(common, "Euro Truck Simulator 2", "bin", "win_x64", "plugins"));
-            candidateFolders.Add(Path.Combine(common, "American Truck Simulator", "bin", "win_x64", "plugins"));
-        }
-
-        candidateFolders = candidateFolders
+        return candidateFolders
             .Select(path => path.TrimEnd('/', '\\'))
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-
-        foreach (var candidate in candidateFolders)
-        {
-            if (string.IsNullOrWhiteSpace(candidate))
-            {
-                continue;
-            }
-
-            if (Directory.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        return candidateFolders.FirstOrDefault();
     }
 }

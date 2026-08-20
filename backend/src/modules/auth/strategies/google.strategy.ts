@@ -1,17 +1,22 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PassportStrategy } from "@nestjs/passport";
-import { Profile, Strategy as PassportGoogleStrategy } from "passport-google-oauth20";
-import { AuthService, SocialAuthProfile } from "../auth.service";
+import {
+  Profile,
+  Strategy as PassportGoogleStrategy,
+} from "passport-google-oauth20";
+import { SocialAuthProfile } from "../auth.service";
 
 @Injectable()
-export class GoogleStrategy extends PassportStrategy(PassportGoogleStrategy, "google") {
-  constructor(
-    private readonly authService: AuthService,
-    configService: ConfigService,
-  ) {
-    const clientId = configService.get<string>("GOOGLE_CLIENT_ID") || "oauth-disabled";
-    const clientSecret = configService.get<string>("GOOGLE_CLIENT_SECRET") || "oauth-disabled";
+export class GoogleStrategy extends PassportStrategy(
+  PassportGoogleStrategy,
+  "google",
+) {
+  constructor(configService: ConfigService) {
+    const clientId =
+      configService.get<string>("GOOGLE_CLIENT_ID") || "oauth-disabled";
+    const clientSecret =
+      configService.get<string>("GOOGLE_CLIENT_SECRET") || "oauth-disabled";
 
     const callbackUrl =
       configService.get<string>("GOOGLE_CALLBACK_URL") ??
@@ -25,18 +30,24 @@ export class GoogleStrategy extends PassportStrategy(PassportGoogleStrategy, "go
     });
   }
 
-  async validate(_accessToken: string, _refreshToken: string, profile: Profile): Promise<any> {
+  validate(
+    _accessToken: string,
+    _refreshToken: string,
+    profile: Profile,
+  ): SocialAuthProfile {
     const userProfile: SocialAuthProfile = {
       id: profile.id,
       provider: "google",
       externalId: profile.id,
       email: this.resolveEmail(profile),
-      emailVerified: (profile._json as { email_verified?: boolean } | undefined)?.email_verified === true,
+      emailVerified:
+        (profile._json as { email_verified?: boolean } | undefined)
+          ?.email_verified === true,
       displayName: profile.displayName,
       avatarUrl: this.resolveAvatar(profile),
     };
 
-    return this.authService.handleOAuthProfile(userProfile);
+    return userProfile;
   }
 
   private resolveEmail(profile: Profile): string | null {
